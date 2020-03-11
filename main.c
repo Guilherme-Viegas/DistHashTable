@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "server.h"
 
 int checkIpPortValid(int, char **);
 int valid_digit(char *);
@@ -10,9 +11,8 @@ int checkIp(char *);
 int main(int argc, char *argv[]) {
     if(!checkIpPortValid(argc, argv)) exit(0); // Check if the dkt program was summoned with 3 arguments
     char ip[15];
-    strcpy(ip, "194.210.157.160");
-    int port;
-    port = (int) *argv[2];
+    strcpy(ip, "192.168.1.16");
+    char* port = argv[2];
 
     while(1) { // The code will run until the "exit" command is summoned
         char buffer[100];
@@ -23,8 +23,9 @@ int main(int argc, char *argv[]) {
         const char delim[2] = " ";
         if(strcmp(strtok(strdup(buffer), delim), "new") == 0) { // Check if the command is the new command
             int server;
-            sscanf(buffer, "%s %d", lixo, &server);
-            printf("Server: %d\n\n", server);
+            sscanf(buffer, "%s %d", lixo, &server); // Get the server port
+            printf("Entrou\n");
+            createServer(port);
         } else if(strcmp(buffer, "exit\n") == 0) {
             exit(0);
         }
