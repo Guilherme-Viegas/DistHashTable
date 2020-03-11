@@ -13,12 +13,11 @@
 #include <errno.h>
 
 
-
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
 
-int fd,errcode, newfd, afd=0;
+int fd,errcode, newfd, afd=0, second_tcp_fd = 0;
 int maxfd, counter;
 ssize_t n;
 fd_set rfds;
@@ -27,7 +26,8 @@ struct addrinfo hints,*res;
 struct sockaddr_in addr;
 char buffer[128];
 
-enum {idle, busy} state;
+typedef enum {idle, busy} state;
+
 
 void createServer(char*port) {
   fd=socket(AF_INET,SOCK_STREAM,0);
@@ -56,16 +56,25 @@ void createServer(char*port) {
 
   if(listen(fd,5)==-1)/*error*/exit(1);
 
-  state = idle;
+    state state_first_tcp;
+    state state_second_tcp;
+
+    state_first_tcp = idle;
+
 
   while(1) {
     FD_ZERO(&rfds);
     FD_SET(fd, &rfds);
     maxfd = fd;
 
-    if(state == busy) {
+    if(state_first_tcp == busy) {
       FD_SET(afd, &rfds);
       maxfd = max(maxfd, afd);
+    }
+    
+    if(state_second_tcp == busy) {
+        FD_SET(second_tcp_fd, &rfds);
+        maxfd = max(maxfd, second_tcp_fd);
     }
 
     counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
@@ -74,28 +83,45 @@ void createServer(char*port) {
     if(FD_ISSET(fd, &rfds)) {
       addrlen = sizeof(addr);
       if((newfd = accept(fd, (struct sockaddr*)&addr, &addrlen)) == -1) exit(1);
-      switch(state) {
+      switch(state_first_tcp) {
         case idle:
-          afd = newfd;
-          state = busy;
-          break;
+            afd = newfd;
+            state_first_tcp = busy;
+            break;
         case busy:
-          close(newfd);
-          break;
+            if(state_second_tcp == idle) {
+                second_tcp_fd = newfd;
+                state_second_tcp = busy;    
+                break;
+            }
+            close(newfd);
+            break;
       }
     }
 
     if(FD_ISSET(afd, &rfds)) {
         if((n = read(afd, buffer, 128)) != 0) {
             if(n==-1) exit(1);
-            // Add write function
-            n=write(newfd,buffer,n);
-            if(n==-1) exit(1);
+            write(1,"received: ",10);write(1,buffer,n); // Print incoming message
+            n=write(afd,"Server Response\n",n);
         } else {
+            printf("\n\n\n\nCLLLOOSSEEE\n\n\n\n");
             close(afd);
-            state = idle;
+            state_first_tcp = idle;
         }
     }
+
+    if(FD_ISSET(second_tcp_fd, &rfds)) {
+        if((n = read(second_tcp_fd, buffer, 128)) != 0) {
+            if(n==-1) exit(1);
+            write(1,"received: ",10);write(1,buffer,n); // Print incoming message
+            n=write(second_tcp_fd,buffer,n);
+        } else {
+            close(second_tcp_fd);
+            state_second_tcp = idle;
+        }
+    }
+
   }
   close(fd);
 }

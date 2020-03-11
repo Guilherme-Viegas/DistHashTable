@@ -11,7 +11,7 @@ int checkIp(char *);
 int main(int argc, char *argv[]) {
     if(!checkIpPortValid(argc, argv)) exit(0); // Check if the dkt program was summoned with 3 arguments
     char ip[15];
-    strcpy(ip, "192.168.1.16");
+    strcpy(ip, "127.0.0.1");
     char* port = argv[2];
 
     while(1) { // The code will run until the "exit" command is summoned

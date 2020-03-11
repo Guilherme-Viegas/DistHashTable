@@ -10,7 +10,7 @@
 #include <string.h>
 #include <math.h>
 #include <sys/select.h>
-#define PORT "58"
+#define PORT "58006"
 
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
@@ -31,19 +31,23 @@ void main() {
     hints.ai_family=AF_INET; //IPv4
     hints.ai_socktype=SOCK_STREAM; //TCP socket
 
-    errcode=getaddrinfo("192.168.1.7",PORT,&hints,&res);
+    errcode=getaddrinfo("127.0.0.1",PORT,&hints,&res);
     if(n!=0)/*error*/exit(1);
 
     n=connect(fd,res->ai_addr,res->ai_addrlen);
     if(n==-1)/*error*/exit(1);
 
-    n=write(fd,"Hello!\n",7);
-    if(n==-1)/*error*/exit(1);
+    while(1) {
+        char user_input[128];
+        fgets(user_input, 100 , stdin);
+        n=write(fd,user_input,128);
+        if(n==-1)/*error*/exit(1);
 
-    n=read(fd,buffer,128);
-    if(n==-1)/*error*/exit(1);
+        n=read(fd,buffer,128);
+        if(n==-1)/*error*/exit(1);
 
-    write(1,"Teste: ",6); write(1,buffer,n);
+        write(1,"Teste: ",6); write(1,buffer,n);
+    }
 
     freeaddrinfo(res);
     close(fd);
