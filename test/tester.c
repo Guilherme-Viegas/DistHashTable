@@ -37,17 +37,17 @@ void main(int argc, char *argv[]) {
     n=connect(fd,res->ai_addr,res->ai_addrlen);
     if(n==-1)/*error*/exit(1);
 
-    while(1) {
+    // while(1) {
         char user_input[128];
         fgets(user_input, 100 , stdin);
-        n=write(fd,user_input,128);
+        n=write(fd,user_input, strlen(user_input));
         if(n==-1)/*error*/exit(1);
 
         n=read(fd,buffer,128);
         if(n==-1)/*error*/exit(1);
 
         write(1,"Teste: ",8); write(1,buffer,n); write(1, "\n", 3);
-    }
+    // }
 
     freeaddrinfo(res);
     close(fd);

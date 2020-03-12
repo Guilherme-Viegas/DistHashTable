@@ -2,8 +2,8 @@
 #define _SERVER_H
 
 typedef struct server {
-  char* myIp;
-  char* myPort;
+  char myIp[30];
+  char myPort[10];
   int key;
 
   char* nextIp;
@@ -12,7 +12,7 @@ typedef struct server {
 }Server;
 
 
-void createServer(char*);
+void createServer(Server*);
 
 
 #endif

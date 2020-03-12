@@ -26,11 +26,11 @@ fd_set rfds;
 socklen_t addrlen;
 struct addrinfo hints,*res;
 struct sockaddr_in addr;
-char buffer[128];
+char buffer[128] = "";
 
 
 
-void createServer(char*port) {
+void createServer(Server* server) {
   fd=socket(AF_INET,SOCK_STREAM,0);
   if (fd==-1) {
       printf("SOCKET ERROR\n");
@@ -42,7 +42,7 @@ void createServer(char*port) {
   hints.ai_socktype=SOCK_STREAM;
   hints.ai_flags=AI_PASSIVE;
 
-  errcode=getaddrinfo(NULL,port,&hints,&res);
+  errcode=getaddrinfo(NULL,server->myPort,&hints,&res);
     if((errcode)!=0) {
       printf("GETADDRINFO ERROR\n");
       /*error*/exit(1);
@@ -112,7 +112,7 @@ void createServer(char*port) {
         } else {
           buffer[n] = '\0';
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
-          n = write(newfd,"Server Response\n",n);
+          n = write(newfd,"Server Response\n",17);
           if(n==-1)/*error*/exit(1);
         }
       }

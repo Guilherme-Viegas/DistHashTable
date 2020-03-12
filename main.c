@@ -7,27 +7,25 @@ int checkIpPortValid(int, char **);
 int valid_digit(char *);
 int checkIp(char *);
 
+char aux[100];
+
 
 int main(int argc, char *argv[]) {
     if(!checkIpPortValid(argc, argv)) exit(0); // Check if the dkt program was summoned with 3 arguments
-    char ip[15];
-    strcpy(ip, "127.0.0.1");
-    char* port = argv[2];
     Server * myServer = (Server*)malloc(sizeof(Server));
-    
+    strcpy(myServer->myIp, "127.0.0.1");
+    strcpy(myServer->myPort, argv[2]);
+      
 
     while(1) { // The code will run until the "exit" command is summoned
         char buffer[100];
-        char lixo[100];
         // Show the user interface
         printf("Available commands:\n\n new i - create a new ring with the i server only \n exit\n");
         fgets(buffer, 100 , stdin);
         const char delim[2] = " ";
         if(strcmp(strtok(strdup(buffer), delim), "new") == 0) { // Check if the command is the new command
-            int server;
-            sscanf(buffer, "%s %d", lixo, &server); // Get the server port
-            printf("Entrou\n");
-            createServer(port);
+            sscanf(buffer, "%s %d", aux, &(myServer->key)); // Get the server key
+            createServer(myServer);
         } else if(strcmp(buffer, "exit\n") == 0) {
             exit(0);
         }
