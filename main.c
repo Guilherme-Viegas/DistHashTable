@@ -13,6 +13,8 @@ int main(int argc, char *argv[]) {
     char ip[15];
     strcpy(ip, "127.0.0.1");
     char* port = argv[2];
+    Server * myServer = (Server*)malloc(sizeof(Server));
+    
 
     while(1) { // The code will run until the "exit" command is summoned
         char buffer[100];

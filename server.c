@@ -11,11 +11,13 @@
 #include <math.h>
 #include <sys/select.h>
 #include <errno.h>
+#include "server.h"
 
 
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
+
 
 int fd,errcode, newfd, client_sockets[5];
 int maxfd, counter;
@@ -109,7 +111,7 @@ void createServer(char*port) {
           client_sockets[i] = 0;
         } else {
           buffer[n] = '\0';
-          write(1,"received: ",10); write(1,buffer,n); // Print incoming message
+          write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           n = write(newfd,"Server Response\n",n);
           if(n==-1)/*error*/exit(1);
         }

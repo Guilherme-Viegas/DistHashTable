@@ -10,7 +10,7 @@
 #include <string.h>
 #include <math.h>
 #include <sys/select.h>
-#define PORT "58012"
+//#define PORT "58020"
 
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
@@ -23,7 +23,7 @@ struct addrinfo hints,*res;
 struct sockaddr_in addr;
 char buffer[128];
 
-void main() {
+void main(int argc, char *argv[]) {
     fd=socket(AF_INET,SOCK_STREAM,0); //TCP socket
     if (fd==-1) exit(1); //error
 
@@ -31,7 +31,7 @@ void main() {
     hints.ai_family=AF_INET; //IPv4
     hints.ai_socktype=SOCK_STREAM; //TCP socket
 
-    errcode=getaddrinfo("127.0.0.1",PORT,&hints,&res);
+    errcode=getaddrinfo("127.0.0.1",argv[1],&hints,&res);
     if(n!=0)/*error*/exit(1);
 
     n=connect(fd,res->ai_addr,res->ai_addrlen);
@@ -46,7 +46,7 @@ void main() {
         n=read(fd,buffer,128);
         if(n==-1)/*error*/exit(1);
 
-        write(1,"Teste: ",6); write(1,buffer,n); write(1, "\n", 3);
+        write(1,"Teste: ",8); write(1,buffer,n); write(1, "\n", 3);
     }
 
     freeaddrinfo(res);
