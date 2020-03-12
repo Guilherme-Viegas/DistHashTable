@@ -17,7 +17,7 @@
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
 
-int fd,errcode, newfd, afd=0, second_tcp_fd = 0;
+int fd,errcode, newfd, client_sockets[5];
 int maxfd, counter;
 ssize_t n;
 fd_set rfds;
@@ -26,7 +26,6 @@ struct addrinfo hints,*res;
 struct sockaddr_in addr;
 char buffer[128];
 
-typedef enum {idle, busy} state;
 
 
 void createServer(char*port) {
@@ -56,72 +55,67 @@ void createServer(char*port) {
 
   if(listen(fd,5)==-1)/*error*/exit(1);
 
-    state state_first_tcp;
-    state state_second_tcp;
-
-    state_first_tcp = idle;
-
 
   while(1) {
+    // Clear all sockets to set
     FD_ZERO(&rfds);
+
+    // Add the main socket to set
     FD_SET(fd, &rfds);
     maxfd = fd;
 
-    if(state_first_tcp == busy) {
-      FD_SET(afd, &rfds);
-      maxfd = max(maxfd, afd);
-    }
-    
-    if(state_second_tcp == busy) {
-        FD_SET(second_tcp_fd, &rfds);
-        maxfd = max(maxfd, second_tcp_fd);
-    }
-
-    counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
-    if(counter <= 0) exit(1);
-
-    if(FD_ISSET(fd, &rfds)) {
-      addrlen = sizeof(addr);
-      if((newfd = accept(fd, (struct sockaddr*)&addr, &addrlen)) == -1) exit(1);
-      switch(state_first_tcp) {
-        case idle:
-            afd = newfd;
-            state_first_tcp = busy;
-            break;
-        case busy:
-            if(state_second_tcp == idle) {
-                second_tcp_fd = newfd;
-                state_second_tcp = busy;    
-                break;
-            }
-            close(newfd);
-            break;
+    // Add all available child sockets to set
+    for (int i = 0; i < 5; i++) {
+      newfd = client_sockets[i];
+      // If there are available sockets
+      if(newfd > 0) {
+        FD_SET(newfd, &rfds);
+      }
+      // Get the highest file descriptor number
+      if(newfd > maxfd) {
+        maxfd = newfd;
       }
     }
 
-    if(FD_ISSET(afd, &rfds)) {
-        if((n = read(afd, buffer, 128)) != 0) {
-            if(n==-1) exit(1);
-            write(1,"received: ",10);write(1,buffer,n); // Print incoming message
-            n=write(afd,"Server Response\n",n);
-        } else {
-            printf("\n\n\n\nCLLLOOSSEEE\n\n\n\n");
-            close(afd);
-            state_first_tcp = idle;
+    
+    counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
+    if(counter <= 0) exit(1);
+
+    // If something is happening in the main socket, it means there's a new connection 
+    if(FD_ISSET(fd, &rfds)) {
+      addrlen = sizeof(addr);
+      if((newfd = accept(fd, (struct sockaddr*)&addr, &addrlen)) == -1) exit(1);
+                 //inform user of socket number - used in send and receive commands  
+      printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , newfd , inet_ntoa(addr.sin_addr) , ntohs (addr.sin_port));   
+
+      for(int i = 0; i < 5; i++) {
+        if(client_sockets[i] == 0) {
+          client_sockets[i] = newfd;
+          break;
         }
+        if(i == 4) {
+          close(newfd);
+        }
+      }
     }
 
-    if(FD_ISSET(second_tcp_fd, &rfds)) {
-        if((n = read(second_tcp_fd, buffer, 128)) != 0) {
-            if(n==-1) exit(1);
-            write(1,"received: ",10);write(1,buffer,n); // Print incoming message
-            n=write(second_tcp_fd,buffer,n);
+    //Else its on some other socket
+    for(int i = 0; i < 5; i++) { 
+      newfd = client_sockets[i];
+      if(FD_ISSET(newfd, &rfds)) {
+        if((n = read(newfd, buffer, 128)) == 0) {
+          close(newfd);
+          printf("Connection closed %d\n\n", i);
+          client_sockets[i] = 0;
         } else {
-            close(second_tcp_fd);
-            state_second_tcp = idle;
+          buffer[n] = '\0';
+          write(1,"received: ",10); write(1,buffer,n); // Print incoming message
+          n = write(newfd,"Server Response\n",n);
+          if(n==-1)/*error*/exit(1);
         }
+      }
     }
-
   }
+  freeaddrinfo(res); 
   close(fd);
 }

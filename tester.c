@@ -10,7 +10,7 @@
 #include <string.h>
 #include <math.h>
 #include <sys/select.h>
-#define PORT "58006"
+#define PORT "58012"
 
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
@@ -46,7 +46,7 @@ void main() {
         n=read(fd,buffer,128);
         if(n==-1)/*error*/exit(1);
 
-        write(1,"Teste: ",6); write(1,buffer,n);
+        write(1,"Teste: ",6); write(1,buffer,n); write(1, "\n", 3);
     }
 
     freeaddrinfo(res);
