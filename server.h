@@ -6,13 +6,21 @@ typedef struct server {
   char myPort[10];
   int key;
 
-  char* nextIp;
-  char* previousIp;
-  char* doubleNextIp;
+  char nextIp[30];
+  char nextPort[10];
+  int nextKey;
+
+  char doubleNextIp[30];
+  char doubleNextPort[10];
+  int doubleNextKey;
+
+  int prevConnFD; // Holds the TCP connection to previous server
+  int nextConnFD; // Holds the TCP connection to next server
 }Server;
 
 
 void createServer(Server*);
+int connectToGivenServer(Server*);
 
 
 #endif

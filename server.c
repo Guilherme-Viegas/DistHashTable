@@ -112,12 +112,49 @@ void createServer(Server* server) {
         } else {
           buffer[n] = '\0';
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
-          n = write(newfd,"Server Response\n",17);
-          if(n==-1)/*error*/exit(1);
+          if(strcmp(buffer, "SUCCCONF\n") == 0) { // If this server is set as a successor
+            if(server->prevConnFD == 0) { // If the previous server is not set
+              server->prevConnFD = newfd; // Set the incoming request as the previous server
+              sprintf(buffer, "SUCC %d %s %s\n", server->key, server->myIp, server->myPort);
+              n = write(server->prevConnFD,buffer, strlen(buffer)); // Server gives its predecessor his info
+              if(n==-1)/*error*/exit(1);
+            } else { // If it already has a predecessor
+
+              // This two operations that follow should only be done after the NEW command, which is where we no longer need to connect to the old predecessor
+              // // close(server->prevConnFD); // Close connection with predecessor
+              // // server->prevConnFD = newfd; // Set the incoming request as the previous server
+
+            }
+          }
+          // n = write(newfd,"Server Response\n",17);
+          // if(n==-1)/*error*/exit(1);
         }
       }
     }
   }
   freeaddrinfo(res); 
   close(fd);
+}
+
+int connectToGivenServer(Server* server) { // sentry 5 10 127.0.0.1 8005
+  fd = socket(AF_INET,SOCK_STREAM,0); //TCP socket
+  if (fd == -1) exit(1); //error
+  
+  memset(&hints,0,sizeof hints);
+  hints.ai_family=AF_INET; //IPv4
+  hints.ai_socktype=SOCK_STREAM; //TCP socket
+  
+  errcode = getaddrinfo(server->nextIp, server->nextPort,&hints,&res);
+  if(errcode != 0) {
+    printf("GET ADDRESS INFO ERROR\n");
+    exit(1);
+  }
+  
+  n = connect(fd,res->ai_addr,res->ai_addrlen);
+  if(n == -1) {
+    printf("CONNECT ERROR\n");
+    exit(1);
+  }
+  
+  return fd;
 }
