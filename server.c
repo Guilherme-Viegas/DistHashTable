@@ -181,6 +181,10 @@ int connectToNextServer(Server* server) { // sentry 5 10 127.0.0.1 8005 and send
 
   n=read(fd,buffer,128);
   if(n==-1)/*error*/exit(1);
+  printf("%s\n", buffer);
+
+  n = write(newfd,"Server Response\n",17);
+  if(n==-1)/*error*/exit(1);
   
   return fd;
 }
