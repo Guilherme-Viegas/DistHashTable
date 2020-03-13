@@ -34,23 +34,32 @@ int main(int argc, char *argv[]) {
         printf("Available commands:\n\n new i \n sentry i succi succi.IP succi.TCP \n exit\n");
         fgets(buffer, 100 , stdin);
         const char delim[2] = " ";
-        if(strcmp(strtok(strdup(buffer), delim), "new") == 0) { // Check if the command is the new command
+        if(strcmp(strtok(strdup(buffer), delim), "new") == 0) { // If its the "new" command then create a ring with that server
             sscanf(buffer, "%s %d", aux, &(myServer->key)); // Get the server key
+            //Just some random values for testing for the succ successor and predecessors values
+            myServer->doubleNextKey = 0;
+            strcpy(myServer->doubleNextIp, "000.000.000.000");
+            strcpy(myServer->doubleNextPort, "00000");
+            //-----------------------------------
             createServer(myServer);
-        } else  if(strcmp(strtok(strdup(buffer), delim), "sentry") == 0) { // Check if the command is the sentry command
+        } else  if(strcmp(strtok(strdup(buffer), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
             sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->key), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
-            myServer->nextConnFD = connectToGivenServer(myServer); // Set the next server as the given server and establish a connection
-            
-            int n = write(myServer->nextConnFD, "SUCCCONF\n", 10); // Tell the successor to define this server as its predecessor
-            if(n == -1)/*error*/exit(1);
-                
-            n = read(myServer->nextConnFD, buffer, 128); // We already have all the data from the next server so we don't need to extract it here in the sentry
-            if(n==-1)/*error*/exit(1);
-            
-            write(1,"echo: ",6); write(1,buffer,n);
+            createServer(myServer); //NAO PODE SER ISTO PORQUE DEPOIS FICA NO WHILE INFINITO
 
-                // freeaddrinfo(res);
-            close(myServer->nextConnFD);
+
+            
+            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
+            
+            // int n = write(myServer->nextConnFD, "SUCCCONF\n", 10); // Tell the successor to define this server as its predecessor
+            // if(n == -1)/*error*/exit(1);
+                
+            // n = read(myServer->nextConnFD, buffer, 128); // We already have all the data from the next server so we don't need to extract it here in the sentry
+            // if(n==-1)/*error*/exit(1);
+            
+            // write(1,"echo: ",6); write(1,buffer,n);
+
+            //     // freeaddrinfo(res);
+            // close(myServer->nextConnFD);
 
         } else if(strcmp(buffer, "exit\n") == 0) {
             exit(0);

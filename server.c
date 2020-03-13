@@ -112,22 +112,43 @@ void createServer(Server* server) {
         } else {
           buffer[n] = '\0';
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
-          if(strcmp(buffer, "SUCCCONF\n") == 0) { // If this server is set as a successor
-            if(server->prevConnFD == 0) { // If the previous server is not set
-              server->prevConnFD = newfd; // Set the incoming request as the previous server
-              sprintf(buffer, "SUCC %d %s %s\n", server->key, server->myIp, server->myPort);
-              n = write(server->prevConnFD,buffer, strlen(buffer)); // Server gives its predecessor his info
-              if(n==-1)/*error*/exit(1);
-            } else { // If it already has a predecessor
+          //Now check what the incoming message is asking for
+          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring  //TODO A MENSAGEM NEW PODE TER 2 SIGNIFICADOS DIFERENTES!!!
+            int newServerKey = 0;
+            char newServerIp[16] = "";
+            char newServerPort[10] = "";
+            decodeMessage(buffer, &newServerKey, newServerIp, newServerPort);
 
-              // This two operations that follow should only be done after the NEW command, which is where we no longer need to connect to the old predecessor
-              // // close(server->prevConnFD); // Close connection with predecessor
-              // // server->prevConnFD = newfd; // Set the incoming request as the previous server
+            //TODO ENVIAR MENSAGEM NEW 8 8.IP 8.TCP AO 5(VER SLIDES) 
+            //ENVIAR UM SUCC 12 12.IP 12.TCP AO 8 PARA QUE O 8 GUARDE AS INFOS SOBRE O SEU SUCESSOR DO SUCESSOR
 
-            }
+            //Sending the infos to entering server about my successor <SUCC 12 12.IP 12.TCP>
+            char str[100] = "";
+            sprintf(str, "SUCC %d %s %s\n", server->doubleNextKey, server->doubleNextIp, server->doubleNextPort);
+            n = write(newfd,str, strlen(str));
+            if(n==-1)/*error*/exit(1);
+          } else if(0) { //If the message received is <SUCC 12 12.IP 12.TCP> TODO
+
           }
-          // n = write(newfd,"Server Response\n",17);
-          // if(n==-1)/*error*/exit(1);
+          
+          
+          // if(strcmp(buffer, "SUCCCONF\n") == 0) { // If this server is set as a successor
+          //   if(server->prevConnFD == 0) { // If the previous server is not set
+          //     server->prevConnFD = newfd; // Set the incoming request as the previous server
+          //     sprintf(buffer, "SUCC %d %s %s\n", server->key, server->myIp, server->myPort);
+          //     n = write(server->prevConnFD,buffer, strlen(buffer)); // Server gives its predecessor his info
+          //     if(n==-1)/*error*/exit(1);
+          //   } else { // If it already has a predecessor
+
+          //     // This two operations that follow should only be done after the NEW command, which is where we no longer need to connect to the old predecessor
+          //     // // close(server->prevConnFD); // Close connection with predecessor
+          //     // // server->prevConnFD = newfd; // Set the incoming request as the previous server
+
+          //   }
+          // }
+
+          n = write(newfd,"Server Response\n",17);
+          if(n==-1)/*error*/exit(1);
         }
       }
     }
@@ -136,7 +157,7 @@ void createServer(Server* server) {
   close(fd);
 }
 
-int connectToGivenServer(Server* server) { // sentry 5 10 127.0.0.1 8005
+int connectToNextServer(Server* server) { // sentry 5 10 127.0.0.1 8005 and send message NEW 8 8.IP 8.TCP
   fd = socket(AF_INET,SOCK_STREAM,0); //TCP socket
   if (fd == -1) exit(1); //error
   
@@ -155,6 +176,33 @@ int connectToGivenServer(Server* server) { // sentry 5 10 127.0.0.1 8005
     printf("CONNECT ERROR\n");
     exit(1);
   }
+
+  char str[100] = "";
+  sprintf(str, "NEW %d %s %s\n", server->key, server->myIp, server->myPort);
+  n = write(fd,str,strlen(str));
+
+  n=read(fd,buffer,128);
+  if(n==-1)/*error*/exit(1);
   
   return fd;
+}
+
+
+
+//Returns key, ip and tcp from a message string like "NEW i i.IP i.TCP"
+void decodeMessage(char* message, int* key, char ip[16], char port[10]) {
+  // Returns first token 
+  char* token = strtok(message, " ");
+  int i = 0; 
+
+  // Keep printing tokens while one of the 
+  // delimiters present in str[]. 
+  while (token != NULL) { 
+      if(i==1) *key = atoi(token);
+      else if(i==2) strcpy(ip, token);
+      else if(i==3) strcpy(port, token);
+
+      token = strtok(NULL, " "); 
+      i++;
+  } 
 }

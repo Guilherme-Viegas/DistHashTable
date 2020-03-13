@@ -20,7 +20,8 @@ typedef struct server {
 
 
 void createServer(Server*);
-int connectToGivenServer(Server*);
+int connectToNextServer(Server*);
+void decodeMessage(char*, int*, char[16], char[10]);
 
 
 #endif
