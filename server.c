@@ -127,8 +127,6 @@ void createServer(Server* server) {
             sprintf(str, "SUCC %d %s %s\n", server->doubleNextKey, server->doubleNextIp, server->doubleNextPort);
             n = write(newfd,str, strlen(str));
             if(n==-1)/*error*/exit(1);
-          } else if(0) { //If the message received is <SUCC 12 12.IP 12.TCP> TODO
-
           }
           
           
