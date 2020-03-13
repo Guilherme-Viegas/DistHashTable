@@ -44,10 +44,8 @@ int main(int argc, char *argv[]) {
             createServer(myServer);
         } else  if(strcmp(strtok(strdup(buffer), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
             sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->key), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
-            createServer(myServer); //NAO PODE SER ISTO PORQUE DEPOIS FICA NO WHILE INFINITO
-
-
             
+            printf("Trying to enter\n");
             myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
             
             // int n = write(myServer->nextConnFD, "SUCCCONF\n", 10); // Tell the successor to define this server as its predecessor
