@@ -1,3 +1,8 @@
+/*
+* RCI Project - Distributed Hashtable - João Maria Janeiro and Guilherme Viegas
+* Key values ​​equal to -1 mean that it does not contain information about that server
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,34 +36,40 @@ int main(int argc, char *argv[]) {
     while(1) { // The code will run until the "exit" command is summoned
         char buffer[100];
         // Show the user interface
-        printf("Available commands:\n\n new i \n sentry i succi succi.IP succi.TCP \n exit\n");
+        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP \n exit\n");
         fgets(buffer, 100 , stdin);
         const char delim[2] = " ";
         if(strcmp(strtok(strdup(buffer), delim), "new") == 0) { // If its the "new" command then create a ring with that server
-            sscanf(buffer, "%s %d", aux, &(myServer->key)); // Get the server key
+            sscanf(buffer, "%s %d", aux, &(myServer->myKey)); // Get the server key
             //Just some random values for testing for the succ successor and predecessors values
-            myServer->doubleNextKey = 0;
-            strcpy(myServer->doubleNextIp, "000.000.000.000");
-            strcpy(myServer->doubleNextPort, "00000");
+            myServer->doubleNextKey = -1;
+            myServer->preKey = -1;
+            myServer->nextKey = -1;
+            //strcpy(myServer->doubleNextIp, "000.000.000.000");
+            //strcpy(myServer->doubleNextPort, "00000");
             //-----------------------------------
             createServer(myServer);
         } else  if(strcmp(strtok(strdup(buffer), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
-            sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->key), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
+            sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
             
             printf("Trying to enter\n");
-            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
+            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection [MISSING CONFIRMATION IF EXISTS]
             
-            // int n = write(myServer->nextConnFD, "SUCCCONF\n", 10); // Tell the successor to define this server as its predecessor
-            // if(n == -1)/*error*/exit(1);
+            sprintf(buffer, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
+            int n = write(myServer->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
+            if(n == -1)/*error*/exit(1);
                 
-            // n = read(myServer->nextConnFD, buffer, 128); // We already have all the data from the next server so we don't need to extract it here in the sentry
-            // if(n==-1)/*error*/exit(1);
-            
-            // write(1,"echo: ",6); write(1,buffer,n);
+            // Get the info about the sucessor of the successor
+            n = read(myServer->nextConnFD, buffer, 128);
+            if(n==-1)/*error*/exit(1);
+            write(1,"\nReceived: ",10); write(1,buffer,n);
 
-            //     // freeaddrinfo(res);
-            // close(myServer->nextConnFD);
+            if(strstr(buffer, "-1") != NULL) myServer->doubleNextKey = -1; //Means there's only 1 server in the ring so no successor of the successor
+            else {
+                printf("There is a successor of the successor\n");
+            }
 
+            createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode [AQUI VAI FALTAR MANTER GUARDADAS AS CONEXÕES QUE FORAM ESTABELECIDADES ANTES(createServer() talvez deva ser alterado)]
         } else if(strcmp(buffer, "exit\n") == 0) {
             exit(0);
         }

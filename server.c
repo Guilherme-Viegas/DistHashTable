@@ -113,37 +113,9 @@ void createServer(Server* server) {
           buffer[n] = '\0';
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           //Now check what the incoming message is asking for
-          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring  //TODO A MENSAGEM NEW PODE TER 2 SIGNIFICADOS DIFERENTES!!!
-            int newServerKey = 0;
-            char newServerIp[16] = "";
-            char newServerPort[10] = "";
-            decodeMessage(buffer, &newServerKey, newServerIp, newServerPort);
-
-            //TODO ENVIAR MENSAGEM NEW 8 8.IP 8.TCP AO 5(VER SLIDES) 
-            //ENVIAR UM SUCC 12 12.IP 12.TCP AO 8 PARA QUE O 8 GUARDE AS INFOS SOBRE O SEU SUCESSOR DO SUCESSOR
-
-            //Sending the infos to entering server about my successor <SUCC 12 12.IP 12.TCP>
-            char str[100] = "";
-            sprintf(str, "SUCC %d %s %s\n", server->doubleNextKey, server->doubleNextIp, server->doubleNextPort);
-            n = write(newfd,str, strlen(str));
-            if(n==-1)/*error*/exit(1);
+          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring  
+            serverIsEntering(buffer, &newfd, server); 
           }
-          
-          
-          // if(strcmp(buffer, "SUCCCONF\n") == 0) { // If this server is set as a successor
-          //   if(server->prevConnFD == 0) { // If the previous server is not set
-          //     server->prevConnFD = newfd; // Set the incoming request as the previous server
-          //     sprintf(buffer, "SUCC %d %s %s\n", server->key, server->myIp, server->myPort);
-          //     n = write(server->prevConnFD,buffer, strlen(buffer)); // Server gives its predecessor his info
-          //     if(n==-1)/*error*/exit(1);
-          //   } else { // If it already has a predecessor
-
-          //     // This two operations that follow should only be done after the NEW command, which is where we no longer need to connect to the old predecessor
-          //     // // close(server->prevConnFD); // Close connection with predecessor
-          //     // // server->prevConnFD = newfd; // Set the incoming request as the previous server
-
-          //   }
-          // }
 
           n = write(newfd,"Server Response\n",17);
           if(n==-1)/*error*/exit(1);
@@ -153,6 +125,40 @@ void createServer(Server* server) {
   }
   freeaddrinfo(res); 
   close(fd);
+}
+
+//For handling the entry of a new server to the ring
+void serverIsEntering(char buffer[128], int *newfd, Server *server) {  //TODO A MENSAGEM NEW PODE TER 2 SIGNIFICADOS DIFERENTES!!!
+  int newServerKey = 0;
+  char newServerIp[16] = "";
+  char newServerPort[10] = "";
+  decodeMessage(buffer, &newServerKey, newServerIp, newServerPort);
+
+  //TODO ENVIAR MENSAGEM NEW 8 8.IP 8.TCP AO 5(VER SLIDES) 
+  //ENVIAR UM SUCC 12 12.IP 12.TCP AO 8 PARA QUE O 8 GUARDE AS INFOS SOBRE O SEU SUCESSOR DO SUCESSOR
+
+  //Sending the infos to entering server about my successor <SUCC 12 12.IP 12.TCP>
+  //If there is no SUCCESSOR then send <SUCC -1>
+  char str[100] = "";
+  if(server->doubleNextKey == -1) { //Does not have successor
+    n = write(*newfd, "SUCC -1", 7);
+  }else {
+    sprintf(str, "SUCC %d %s %s\n", server->doubleNextKey, server->doubleNextIp, server->doubleNextPort);
+    n = write(*newfd,str, strlen(str));
+  }
+  if(n==-1)/*error*/exit(1);
+
+  //Send the NEW command to it's predecessor, if there isn't then send to the one trying to enter the ring
+  strcpy(str, "");
+  if(server->preKey == -1) { //There is no predecessor
+    sprintf(str, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
+    n = write(*newfd, str, strlen(str));
+  } else { //Send NEW to predecessor
+    sprintf(str, "NEW %d %s %s\n", newServerKey, newServerIp, newServerPort);
+    n = write(server->prevConnFD, str, strlen(str));
+  }
+  if(n==-1)/*error*/exit(1);
+
 }
 
 int connectToNextServer(Server* server) { // sentry 5 10 127.0.0.1 8005 and send message NEW 8 8.IP 8.TCP
@@ -174,18 +180,6 @@ int connectToNextServer(Server* server) { // sentry 5 10 127.0.0.1 8005 and send
     printf("CONNECT ERROR\n");
     exit(1);
   }
-
-  char str[100] = "";
-  sprintf(str, "NEW %d %s %s\n", server->key, server->myIp, server->myPort);
-  n = write(fd,str,strlen(str));
-
-  n=read(fd,buffer,128);
-  if(n==-1)/*error*/exit(1);
-  printf("%s\n", buffer);
-
-  n = write(newfd,"Server Response\n",17);
-  if(n==-1)/*error*/exit(1);
-  
   return fd;
 }
 
