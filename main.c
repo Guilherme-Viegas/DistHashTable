@@ -56,14 +56,14 @@ int main(int argc, char *argv[]) {
             int n = write(myServer->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
             if(n == -1)/*error*/exit(1);
                 
+            setsockopt(myServer->nextConnFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval)); //2 second timeout on the reads; First time we don't get the SUCC response
+
             // Get the info about the sucessor of the successor
             n = read(myServer->nextConnFD, buffer, 128);
-            if(n==-1)/*error*/exit(1);
-            write(1,"\nReceived: ",10); write(1,buffer,n);
-            
-            sscanf(buffer, "%s %d %s %s", aux, &(myServer->doubleNextKey), myServer->doubleNextIp, myServer->doubleNextPort); // Get the double successor details and update
-
-            //setsockopt(myServer->nextConnFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval)); //2 second timeout on the reads
+            if(n!=-1) {
+                write(1,"\nReceived: ",10); write(1,buffer,n);
+                sscanf(buffer, "%s %d %s %s", aux, &(myServer->doubleNextKey), myServer->doubleNextIp, myServer->doubleNextPort); // Get the double successor details and update   
+            }
 
             createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode [AQUI VAI FALTAR MANTER GUARDADAS AS CONEXÕES QUE FORAM ESTABELECIDADES ANTES(createServer() talvez deva ser alterado)]
         } else if(strcmp(buffer, "exit\n") == 0) {

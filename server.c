@@ -122,10 +122,8 @@ void createServer(Server* server) {
               }
           } else if(strstr(buffer, "SUCCCONF") != NULL) {
             server->prevConnFD = newfd;
+            n = write(server->prevConnFD, "Sucessfully connected\n", 23);
           }
-
-          n = write(newfd,"Server Response\n",17);
-          if(n==-1)/*error*/exit(1);
         }
       }
     }
@@ -136,7 +134,6 @@ void createServer(Server* server) {
 
 //For handling the entry of a new server to the ring
 void serverIsEntering(char buffer[128], int *newfd, Server *server) {
-  printf("Next connection: %d\n", server->nextConnFD);
   if(server->nextConnFD == 0) { //Does not have successor
     server->nextConnFD = *newfd; // Set the incoming request as the next server
     sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
@@ -159,7 +156,9 @@ void serverIsEntering(char buffer[128], int *newfd, Server *server) {
   if((*newfd == server->nextConnFD) && (server->myKey != server->doubleNextKey)) { // In case the NEW command comes from the successor, it means we new to update our sucessor
     close(server->nextConnFD);
     sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
+    write(1, "Line 159\n", 10);
     server->nextConnFD = connectToNextServer(server);
+    write(1, "Line 161\n", 10);
     n = write(server->nextConnFD, "SUCCCONF", 9); 
     if(n == -1) {
       printf("Write Error");
