@@ -27,7 +27,7 @@ socklen_t addrlen;
 struct addrinfo hints,*res;
 struct sockaddr_in addr;
 char buffer[128] = "";
-
+char str[100] = "";
 
 
 void createServer(Server* server) {
@@ -115,6 +115,13 @@ void createServer(Server* server) {
           //Now check what the incoming message is asking for
           if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring  
             serverIsEntering(buffer, &newfd, server); 
+          } else if(strstr(buffer, "SUCC") != NULL) {
+              //TODO caso eu seja o 3 a receber SUCC do 5 tenho de atualizar
+              if(newfd == server->nextConnFD) {
+                sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the successor details
+              }
+          } else if(strstr(buffer, "SUCCCONF") != NULL) {
+            server->prevConnFD = newfd;
           }
 
           n = write(newfd,"Server Response\n",17);
@@ -128,36 +135,43 @@ void createServer(Server* server) {
 }
 
 //For handling the entry of a new server to the ring
-void serverIsEntering(char buffer[128], int *newfd, Server *server) {  //TODO A MENSAGEM NEW PODE TER 2 SIGNIFICADOS DIFERENTES!!!
-  int newServerKey = 0;
-  char newServerIp[16] = "";
-  char newServerPort[10] = "";
-  decodeMessage(buffer, &newServerKey, newServerIp, newServerPort);
-
-  //TODO ENVIAR MENSAGEM NEW 8 8.IP 8.TCP AO 5(VER SLIDES) 
-  //ENVIAR UM SUCC 12 12.IP 12.TCP AO 8 PARA QUE O 8 GUARDE AS INFOS SOBRE O SEU SUCESSOR DO SUCESSOR
-
-  //Sending the infos to entering server about my successor <SUCC 12 12.IP 12.TCP>
-  //If there is no SUCCESSOR then send <SUCC -1>
-  char str[100] = "";
-  if(server->doubleNextKey == -1) { //Does not have successor
-    n = write(*newfd, "SUCC -1", 7);
+void serverIsEntering(char buffer[128], int *newfd, Server *server) {
+  printf("Next connection: %d\n", server->nextConnFD);
+  if(server->nextConnFD == 0) { //Does not have successor
+    server->nextConnFD = *newfd; // Set the incoming request as the next server
+    sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
+    // Set the double next info as your own
+    strcpy(server->doubleNextIp, server->myIp);
+    strcpy(server->doubleNextPort, server->myPort);
+    server->doubleNextKey = server->myKey;
   }else {
-    sprintf(str, "SUCC %d %s %s\n", server->doubleNextKey, server->doubleNextIp, server->doubleNextPort);
+    sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
     n = write(*newfd,str, strlen(str));
   }
   if(n==-1)/*error*/exit(1);
 
   //Send the NEW command to it's predecessor, if there isn't then send to the one trying to enter the ring
-  strcpy(str, "");
-  if(server->preKey == -1) { //There is no predecessor
-    sprintf(str, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
-    n = write(*newfd, str, strlen(str));
-  } else { //Send NEW to predecessor
-    sprintf(str, "NEW %d %s %s\n", newServerKey, newServerIp, newServerPort);
-    n = write(server->prevConnFD, str, strlen(str));
+  if(server->prevConnFD != 0) { // If the current server has no previous server
+    n = write(server->prevConnFD, buffer, strlen(buffer));
   }
-  if(n==-1)/*error*/exit(1);
+  server->prevConnFD = *newfd; // Set the incoming request as the previous server
+
+  if((*newfd == server->nextConnFD) && (server->myKey != server->doubleNextKey)) { // In case the NEW command comes from the successor, it means we new to update our sucessor
+    close(server->nextConnFD);
+    sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
+    server->nextConnFD = connectToNextServer(server);
+    n = write(server->nextConnFD, "SUCCCONF", 9); 
+    if(n == -1) {
+      printf("Write Error");
+      exit(1);
+    }
+    sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
+    n = write(server->prevConnFD, str, strlen(str)); 
+    if(n == -1) {
+      printf("Write Error");
+      exit(1);
+    }
+  }
 
 }
 
@@ -177,6 +191,7 @@ int connectToNextServer(Server* server) { // sentry 5 10 127.0.0.1 8005 and send
   
   n = connect(fd,res->ai_addr,res->ai_addrlen);
   if(n == -1) {
+    printf("Error code: %d\n", errno);
     printf("CONNECT ERROR\n");
     exit(1);
   }

@@ -10,10 +10,6 @@ typedef struct server {
   char nextPort[10];
   int nextKey;
 
-  char preIp[30];
-  char prePort[10];
-  int preKey;
-
   char doubleNextIp[30];
   char doubleNextPort[10];
   int doubleNextKey;

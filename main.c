@@ -23,10 +23,14 @@ int checkIpPortValid(int, char **);
 int valid_digit(char *);
 int checkIp(char *);
 
+struct timeval tv;
 char aux[100];
 
 
 int main(int argc, char *argv[]) {
+    tv.tv_sec = 2;        // 2Secs Timeout
+    tv.tv_usec = 0;        // Safer to initialize
+
     if(!checkIpPortValid(argc, argv)) exit(0); // Check if the dkt program was summoned with 3 arguments
     Server * myServer = (Server*)malloc(sizeof(Server));
     strcpy(myServer->myIp, "127.0.0.1");
@@ -41,13 +45,6 @@ int main(int argc, char *argv[]) {
         const char delim[2] = " ";
         if(strcmp(strtok(strdup(buffer), delim), "new") == 0) { // If its the "new" command then create a ring with that server
             sscanf(buffer, "%s %d", aux, &(myServer->myKey)); // Get the server key
-            //Just some random values for testing for the succ successor and predecessors values
-            myServer->doubleNextKey = -1;
-            myServer->preKey = -1;
-            myServer->nextKey = -1;
-            //strcpy(myServer->doubleNextIp, "000.000.000.000");
-            //strcpy(myServer->doubleNextPort, "00000");
-            //-----------------------------------
             createServer(myServer);
         } else  if(strcmp(strtok(strdup(buffer), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
             sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
@@ -63,11 +60,10 @@ int main(int argc, char *argv[]) {
             n = read(myServer->nextConnFD, buffer, 128);
             if(n==-1)/*error*/exit(1);
             write(1,"\nReceived: ",10); write(1,buffer,n);
+            
+            sscanf(buffer, "%s %d %s %s", aux, &(myServer->doubleNextKey), myServer->doubleNextIp, myServer->doubleNextPort); // Get the double successor details and update
 
-            if(strstr(buffer, "-1") != NULL) myServer->doubleNextKey = -1; //Means there's only 1 server in the ring so no successor of the successor
-            else {
-                printf("There is a successor of the successor\n");
-            }
+            //setsockopt(myServer->nextConnFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval)); //2 second timeout on the reads
 
             createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode [AQUI VAI FALTAR MANTER GUARDADAS AS CONEXÕES QUE FORAM ESTABELECIDADES ANTES(createServer() talvez deva ser alterado)]
         } else if(strcmp(buffer, "exit\n") == 0) {
