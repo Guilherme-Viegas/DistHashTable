@@ -59,10 +59,17 @@ int main(int argc, char *argv[]) {
             setsockopt(myServer->nextConnFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval)); //2 second timeout on the reads; First time we don't get the SUCC response
 
             n = read(myServer->nextConnFD, buffer, 128); //Update my double next successor
+            if(strstr(buffer, "NEW") != NULL) {
+                write(1,"\nReceived NEW: ",10); write(1,buffer,n);
+                myServer->prevConnFD = myServer->nextConnFD;
+            }
+
+            n = read(myServer->nextConnFD, buffer, 128); //Update my double next successor
             if(strstr(buffer, "SUCC") != NULL) {
-                write(1,"\nReceived: ",10); write(1,buffer,n);
+                write(1,"\nReceived SUCC: ",10); write(1,buffer,n);
                 sscanf(buffer, "%s %d %s %s", aux, &(myServer->doubleNextKey), myServer->doubleNextIp, myServer->doubleNextPort); // Get the double successor details and update   
             }
+
 
             printServerData(myServer);
             createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode [AQUI VAI FALTAR MANTER GUARDADAS AS CONEXÕES QUE FORAM ESTABELECIDADES ANTES(createServer() talvez deva ser alterado)]
