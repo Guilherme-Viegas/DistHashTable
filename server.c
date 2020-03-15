@@ -67,7 +67,7 @@ void createServer(Server* server) {
     maxfd = fd;
 
     // Add all available child sockets to set
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 3; i++) {
       newfd = client_sockets[i];
       // If there are available sockets
       if(newfd > 0) {
@@ -76,6 +76,23 @@ void createServer(Server* server) {
       // Get the highest file descriptor number
       if(newfd > maxfd) {
         maxfd = newfd;
+      }
+    }
+    if(server->prevConnFD > 0) {
+      client_sockets[3] = server->prevConnFD;
+      FD_SET(server->prevConnFD, &rfds);
+
+      if(server->prevConnFD > maxfd) {
+        maxfd = server->prevConnFD;
+      }
+    }
+
+    if(server->nextConnFD > 0) {
+      client_sockets[4] = server->nextConnFD;
+      FD_SET(server->nextConnFD, &rfds);
+
+      if(server->nextConnFD > maxfd) {
+        maxfd = server->nextConnFD;
       }
     }
 
@@ -113,22 +130,27 @@ void createServer(Server* server) {
           buffer[n] = '\0';
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           //Now check what the incoming message is asking for
-          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring
-            printServerData(server);
+          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring //PROBLEMA É AQUI!!!
+            //printServerData(server);
             serverIsEntering(buffer, &newfd, server);
-            printServerData(server); 
+            //printServerData(server); 
           } else if(strstr(buffer, "SUCC") != NULL) {
-              if(newfd == server->nextConnFD) {
+              if((server->prevConnFD == 0) ) {
+                write(1,"\nReceived SUCC: ",17); write(1,buffer,n);
+                sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the double successor details and update   
+                server->prevConnFD = server->nextConnFD;
+              } else if(newfd == server->nextConnFD) {
                 sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the successor details
               }
-              printServerData(server);
+              //printServerData(server);
           } else if(strstr(buffer, "SUCCCONF") != NULL) {
             server->prevConnFD = newfd;
             n = write(server->prevConnFD, "Sucessfully connected\n", 23);
             n = write(1, "Sucessfully connected\n", 23);
-            printServerData(server);
+            //printServerData(server);
           }
         }
+        printServerData(server);
       }
     }
   }
@@ -143,7 +165,6 @@ void serverIsEntering(char buffer[128], int *newfd, Server *server) {
   char newPort[10];
   int newKey = 0;
   sscanf(buffer, "%s %d %s %s", str, &newKey, newIp, newPort);
-
   if(*newfd == server->nextConnFD) { //Se o comando NEW vier do sucessor...
       //Atualiza o meu duplo sucessor para ser o que é o meu atual sucessor
       server->doubleNextKey = server->nextKey;
@@ -154,7 +175,10 @@ void serverIsEntering(char buffer[128], int *newfd, Server *server) {
       server->nextKey = newKey;
       strcpy(server->nextIp, newIp);
       strcpy(server->nextPort, newPort);
-      close(server->nextConnFD);
+      if(server->nextConnFD != server->prevConnFD) {
+        close(server->nextConnFD);
+      }
+      
       server->nextConnFD = connectToNextServer(server); //Tem de alterar a conexão com o sucessor para se ligar ao servidor entrante
 
       //Envia SUCCCONF ao servidor entrante
@@ -173,7 +197,7 @@ void serverIsEntering(char buffer[128], int *newfd, Server *server) {
       strcpy(server->doubleNextPort, server->myPort);
       server->doubleNextKey = server->myKey;
 
-      n = write(*newfd,buffer, strlen(buffer)); if(n==-1)/*error*/exit(1);
+      //n = write(*newfd,buffer, strlen(buffer)); if(n==-1)/*error*/exit(1);
     } else { 
         if(server->doubleNextKey == server->myKey) { //Se eu for o meu proprio duplo sucessor entao existem apenas 2 servidores no anel[tenho de mudar o meu proprio duplo]
           server->doubleNextKey = newKey;
@@ -181,6 +205,7 @@ void serverIsEntering(char buffer[128], int *newfd, Server *server) {
           strcpy(server->doubleNextPort, newPort);
         }
         n = write(server->prevConnFD, buffer, strlen(buffer)); if(n==-1)/*error*/exit(1); //Enviar NEW ao seu predecessor atual (5)
+        printf("Linha 184:%ld %s \n",n, buffer);
         //Atualiza o seu predecessor
         server->prevConnFD = *newfd;
         server->prevKey = newKey;
