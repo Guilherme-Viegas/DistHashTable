@@ -10,6 +10,10 @@ typedef struct server {
   char nextPort[10];
   int nextKey;
 
+  char prevIp[30];
+  char prevPort[10];
+  int prevKey;
+
   char doubleNextIp[30];
   char doubleNextPort[10];
   int doubleNextKey;
@@ -23,6 +27,7 @@ void createServer(Server*);
 int connectToNextServer(Server*);
 void decodeMessage(char*, int*, char[16], char[10]);
 void serverIsEntering(char[128], int *, Server*);
+void printServerData(Server*);
 
 
 #endif

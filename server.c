@@ -113,16 +113,19 @@ void createServer(Server* server) {
           buffer[n] = '\0';
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           //Now check what the incoming message is asking for
-          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring  
-            serverIsEntering(buffer, &newfd, server); 
-          } else if(strstr(buffer, "SUCC") != NULL) {
-              //TODO caso eu seja o 3 a receber SUCC do 5 tenho de atualizar
-              if(newfd == server->nextConnFD) {
+          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring
+            printServerData(server);
+            serverIsEntering(buffer, &newfd, server);
+            printServerData(server); ) != NULL) {
+              if(newfd == server->nextC
+          } else if(strstr(buffer, "SUCC"onnFD) {
                 sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the successor details
               }
+              printServerData(server);
           } else if(strstr(buffer, "SUCCCONF") != NULL) {
             server->prevConnFD = newfd;
             n = write(server->prevConnFD, "Sucessfully connected\n", 23);
+            printServerData(server);
           }
         }
       }
@@ -134,47 +137,61 @@ void createServer(Server* server) {
 
 //For handling the entry of a new server to the ring
 void serverIsEntering(char buffer[128], int *newfd, Server *server) {
-  if(server->nextConnFD == 0) { //Does not have successor
-    server->nextConnFD = *newfd; // Set the incoming request as the next server
-    sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
-    // Set the double next info as your own
-    strcpy(server->doubleNextIp, server->myIp);
-    strcpy(server->doubleNextPort, server->myPort);
-    server->doubleNextKey = server->myKey;
-  }else {
-    sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
-    n = write(*newfd,str, strlen(str));
-  }
-  if(n==-1)/*error*/exit(1);
+  char str[100];
+  char newIp[30];
+  char newPort[10];
+  int newKey = 0;
+  sscanf(buffer, "%s %d %s %s", str, &newKey, newIp, newPort);
 
-  //Send the NEW command to it's predecessor, if there isn't then send to the one trying to enter the ring
-  if(server->prevConnFD != 0) { // If the current server has no previous server
-    n = write(server->prevConnFD, buffer, strlen(buffer));
-  }
-  server->prevConnFD = *newfd; // Set the incoming request as the previous server
+  if(*newfd == server->nextConnFD) { //Se o comando NEW vier do sucessor...
+      //Atualiza o meu duplo sucessor para ser o que é o meu atual sucessor
+      server->doubleNextKey = server->nextKey;
+      strcpy(server->doubleNextIp, server->nextIp);
+      strcpy(server->doubleNextPort, server->nextPort);
 
-  if((*newfd == server->nextConnFD) && (server->myKey != server->doubleNextKey)) { // In case the NEW command comes from the successor, it means we new to update our sucessor
-    close(server->nextConnFD);
-    sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
-    write(1, "Line 159\n", 10);
-    server->nextConnFD = connectToNextServer(server);
-    write(1, "Line 161\n", 10);
-    n = write(server->nextConnFD, "SUCCCONF", 9); 
-    if(n == -1) {
-      printf("Write Error");
-      exit(1);
-    }
-    sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
-    n = write(server->prevConnFD, str, strlen(str)); 
-    if(n == -1) {
-      printf("Write Error");
-      exit(1);
+      //Atualiza o seu sucessor para ser o servidor entrante
+      server->nextKey = newKey;
+      strcpy(server->nextIp, newIp);
+      strcpy(server->nextPort, newPort);
+      close(server->nextConnFD);
+      server->nextConnFD = connectToNextServer(server); //Tem de alterar a conexão com o sucessor para se ligar ao servidor entrante
+
+      //Envia SUCCCONF ao servidor entrante
+      n = write(server->nextConnFD, "SUCCCONF", 9);  if(n==-1)/*error*/exit(1);
+
+      sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort); //Envia SUCC ao seu predecessor (3) para ele atualizar o seu duplo sucessor
+      n = write(server->prevConnFD, str, strlen(str)); if(n==-1)/*error*/exit(1);
+  }else { //Então é porque é um novo servidor a enviar o comando NEW
+    if(server->nextConnFD == 0) { //Não tem sucessor, logo sou o unico servidor do anel
+      server->nextConnFD = *newfd; // Set the incoming request as the next server
+      server->prevConnFD = *newfd;
+      sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
+      // Set the double next info as your own
+      strcpy(server->doubleNextIp, server->myIp);
+      strcpy(server->doubleNextPort, server->myPort);
+      server->doubleNextKey = server->myKey;
+    } else { 
+        if(server->doubleNextKey == server->myKey) { //Se eu for o meu proprio duplo sucessor entao existem apenas 2 servidores no anel[tenho de mudar o meu proprio duplo]
+          server->doubleNextKey = newKey;
+          strcpy(server->doubleNextIp, newIp);
+          strcpy(server->doubleNextPort, newPort);
+        }
+        n = write(server->prevConnFD, buffer, strlen(buffer)); if(n==-1)/*error*/exit(1); //Enviar NEW ao seu predecessor atual (5)
+        //Atualiza o seu predecessor
+        server->prevConnFD = *newfd;
+        server->prevKey = newKey;
+        strcpy(server->prevIp, newIp);
+        strcpy(server->prevPort, newPort);
+
+        //Envia SUCC ao servidor entrante
+        sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
+        n = write(*newfd,str, strlen(str)); if(n==-1)/*error*/exit(1);
     }
   }
 
 }
 
-int connectToNextServer(Server* server) { // sentry 5 10 127.0.0.1 8005 and send message NEW 8 8.IP 8.TCP
+int connectToNextServer(Server* server) {
   fd = socket(AF_INET,SOCK_STREAM,0); //TCP socket
   if (fd == -1) exit(1); //error
   
@@ -215,4 +232,8 @@ void decodeMessage(char* message, int* key, char ip[16], char port[10]) {
       token = strtok(NULL, " "); 
       i++;
   } 
+}
+
+void printServerData(Server* server) {
+  printf("\n\n myKey: %d\nnextKey: %d\ndoubleNextKey: %d\nprevKey: %d\nnextConnection: %d\nprevConnection: %d\n\n", server->myKey, server->nextKey, server->doubleNextKey, server->prevKey, server->nextConnFD, server->prevConnFD);
 }

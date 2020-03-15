@@ -48,23 +48,23 @@ int main(int argc, char *argv[]) {
             createServer(myServer);
         } else  if(strcmp(strtok(strdup(buffer), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
             sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
-            
             printf("Trying to enter\n");
             myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection [MISSING CONFIRMATION IF EXISTS]
-            
+            printf("Linha 53 do main\n");
+
             sprintf(buffer, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
             int n = write(myServer->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
             if(n == -1)/*error*/exit(1);
                 
             setsockopt(myServer->nextConnFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval)); //2 second timeout on the reads; First time we don't get the SUCC response
 
-            // Get the info about the sucessor of the successor
-            n = read(myServer->nextConnFD, buffer, 128);
-            if(n!=-1) {
+            n = read(myServer->nextConnFD, buffer, 128); //Update my double next successor
+            if(strstr(buffer, "SUCC") != NULL) {
                 write(1,"\nReceived: ",10); write(1,buffer,n);
                 sscanf(buffer, "%s %d %s %s", aux, &(myServer->doubleNextKey), myServer->doubleNextIp, myServer->doubleNextPort); // Get the double successor details and update   
             }
 
+            printServerData(myServer);
             createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode [AQUI VAI FALTAR MANTER GUARDADAS AS CONEXÕES QUE FORAM ESTABELECIDADES ANTES(createServer() talvez deva ser alterado)]
         } else if(strcmp(buffer, "exit\n") == 0) {
             exit(0);
