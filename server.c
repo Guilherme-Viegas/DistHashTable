@@ -19,7 +19,7 @@
 #endif
 
 
-int fd,errcode, newfd, client_sockets[5];
+int fd,errcode, newfd, client_sockets[20];
 int maxfd, counter;
 ssize_t n;
 fd_set rfds;
@@ -67,7 +67,7 @@ void createServer(Server* server) {
     maxfd = fd;
 
     // Add all available child sockets to set
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 18; i++) {
       newfd = client_sockets[i];
       // If there are available sockets
       if(newfd > 0) {
@@ -79,7 +79,7 @@ void createServer(Server* server) {
       }
     }
     if(server->prevConnFD > 0) {
-      client_sockets[3] = server->prevConnFD;
+      client_sockets[18] = server->prevConnFD;
       FD_SET(server->prevConnFD, &rfds);
 
       if(server->prevConnFD > maxfd) {
@@ -88,7 +88,7 @@ void createServer(Server* server) {
     }
 
     if(server->nextConnFD > 0) {
-      client_sockets[4] = server->nextConnFD;
+      client_sockets[19] = server->nextConnFD;
       FD_SET(server->nextConnFD, &rfds);
 
       if(server->nextConnFD > maxfd) {
@@ -107,19 +107,19 @@ void createServer(Server* server) {
                  //inform user of socket number - used in send and receive commands  
       printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , newfd , inet_ntoa(addr.sin_addr) , ntohs (addr.sin_port));   
 
-      for(int i = 0; i < 5; i++) {
+      for(int i = 0; i < 18; i++) {
         if(client_sockets[i] == 0) {
           client_sockets[i] = newfd;
           break;
         }
-        if(i == 4) {
+        if(i == 17) {
           close(newfd);
         }
       }
     }
 
     //Else its on some other socket
-    for(int i = 0; i < 5; i++) { 
+    for(int i = 0; i < 20; i++) { 
       newfd = client_sockets[i];
       if(FD_ISSET(newfd, &rfds)) {
         if((n = read(newfd, buffer, 128)) == 0) {
@@ -130,11 +130,9 @@ void createServer(Server* server) {
           buffer[n] = '\0';
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           //Now check what the incoming message is asking for
-          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring //PROBLEMA É AQUI!!!
-            //printServerData(server);
+          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring
             serverIsEntering(buffer, &newfd, server);
-            //printServerData(server); 
-          } else if(strstr(buffer, "SUCC") != NULL) {
+          } else if(strstr(buffer, "SUCC ") != NULL) {
               if((server->prevConnFD == 0) ) {
                 write(1,"\nReceived SUCC: ",17); write(1,buffer,n);
                 sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the double successor details and update   
@@ -142,12 +140,10 @@ void createServer(Server* server) {
               } else if(newfd == server->nextConnFD) {
                 sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the successor details
               }
-              //printServerData(server);
-          } else if(strstr(buffer, "SUCCCONF") != NULL) {
+          } else if(strcmp(buffer, "SUCCCONF\n") == 0) {
             server->prevConnFD = newfd;
-            n = write(server->prevConnFD, "Sucessfully connected\n", 23);
+            //n = write(server->prevConnFD, "Sucessfully connected\n", 23);
             n = write(1, "Sucessfully connected\n", 23);
-            //printServerData(server);
           }
         }
         printServerData(server);
@@ -165,6 +161,7 @@ void serverIsEntering(char buffer[128], int *newfd, Server *server) {
   char newPort[10];
   int newKey = 0;
   sscanf(buffer, "%s %d %s %s", str, &newKey, newIp, newPort);
+
   if(*newfd == server->nextConnFD) { //Se o comando NEW vier do sucessor...
       //Atualiza o meu duplo sucessor para ser o que é o meu atual sucessor
       server->doubleNextKey = server->nextKey;
