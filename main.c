@@ -50,27 +50,13 @@ int main(int argc, char *argv[]) {
             sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
             printf("Trying to enter\n");
             myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection [MISSING CONFIRMATION IF EXISTS]
-            printf("Next: %d\n", myServer->nextConnFD);
+            
             sprintf(buffer, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
             int n = write(myServer->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
             if(n == -1)/*error*/exit(1);
-                
-            // setsockopt(myServer->nextConnFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval)); //2 second timeout on the reads; First time we don't get the SUCC response
 
-            // n = read(myServer->nextConnFD, buffer, 128); //Update my double next successor
-            // if(strstr(buffer, "NEW") != NULL) {
-            //     write(1,"\nReceived NEW: ",16); write(1,buffer,n);
-            //     write(1,"\n\n", 3);
-            //     myServer->prevConnFD = myServer->nextConnFD;
-            // }
-
-            // n = read(myServer->nextConnFD, buffer, 128); //Update my double next successor
-            // if(strstr(buffer, "SUCC") != NULL) {
-            //     write(1,"\nReceived SUCC: ",17); write(1,buffer,n);
-            //     sscanf(buffer, "%s %d %s %s", aux, &(myServer->doubleNextKey), myServer->doubleNextIp, myServer->doubleNextPort); // Get the double successor details and update   
-            //     myServer->prevConnFD = myServer->nextConnFD;
-            // }
-            
+            printf("Sent: %s", buffer); //ERROR: our code doesn't reach this currently
+                           
             createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode
         } else if(strcmp(buffer, "exit\n") == 0) {
             exit(0);
