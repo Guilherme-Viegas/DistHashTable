@@ -22,15 +22,10 @@
 int checkIpPortValid(int, char **);
 int valid_digit(char *);
 int checkIp(char *);
-
-struct timeval tv;
 char aux[100];
 
 
 int main(int argc, char *argv[]) {
-    tv.tv_sec = 2;        // 2Secs Timeout
-    tv.tv_usec = 0;        // Safer to initialize
-
     if(!checkIpPortValid(argc, argv)) exit(0); // Check if the dkt program was summoned with 3 arguments
     Server * myServer = (Server*)malloc(sizeof(Server));
     strcpy(myServer->myIp, "127.0.0.1");

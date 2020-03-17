@@ -74,7 +74,7 @@ void createServer(Server* server) {
 
 
     // Add all available child sockets to set
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
       newfd = client_sockets[i];
       // If there are available sockets
       if(newfd > 0) {
@@ -134,37 +134,54 @@ void createServer(Server* server) {
       }
     }
 
+    for (int i = 0; i < 6; i++) {
+      if ((client_sockets[i] == server->nextConnFD) || (client_sockets[i] == server->prevConnFD)) {
+        client_sockets[i] = 0;
+      }
+    }
+
     //Else its on some other socket
     for(int i = 0; i < 8; i++) { 
       newfd = client_sockets[i];
-      if(FD_ISSET(newfd, &rfds)) {
-        if((n = read(newfd, buffer, 128)) == 0) {
-          close(newfd);
-          printf("Connection closed %d\n\n", i);
-          client_sockets[i] = 0;
-        } else {
-          buffer[n] = '\0';
-          write(1,"received: ",11); write(1,buffer,n); // Print incoming message
-          //Now check what the incoming message is asking for
-          if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring
-            serverIsEntering(buffer, &newfd, server);
-          } else if(strstr(buffer, "SUCC ") != NULL) {
-              if((server->prevConnFD == 0) ) {
-                write(1,"\nReceived SUCC: ",17); write(1,buffer,n);
-                sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the double successor details and update   
-                server->prevConnFD = server->nextConnFD;
-              } else if(newfd == server->nextConnFD) {
-                sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the successor details
+      printf("Reached for %d %d\n", i, client_sockets[i]);
+      if(i == 7) {
+        if(client_sockets[6] != client_sockets[7]) {
+          if(FD_ISSET(newfd, &rfds)) {
+            if((n = read(newfd, buffer, 128)) == 0) {
+              close(newfd);
+              printf("Connection closed %d\n\n", i);
+              client_sockets[i] = 0;
+            } else {
+              buffer[n] = '\0';
+              write(1,"received: ",11); write(1,buffer,n); // Print incoming message
+              //Now check what the incoming message is asking for
+              if(strstr(buffer, "NEW") != NULL) { //A new server is trying to enter the ring
+                int oldNext = server->nextConnFD; 
+                serverIsEntering(buffer, &newfd, server);
+                if(server->nextConnFD != oldNext) { // If the next connection changes, update nextConnFD so it doesn't block the execution
+                  client_sockets[7] = server->nextConnFD;
+                }
+              } else if(strstr(buffer, "SUCC ") != NULL) {
+                  if((server->prevConnFD == 0) ) {
+                    write(1,"\nReceived SUCC: ",17); write(1,buffer,n);
+                    sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the double successor details and update   
+                    server->prevConnFD = server->nextConnFD;
+                  } else if(newfd == server->nextConnFD) {
+                    sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort); // Get the successor details
+                  }
+              } else if(strcmp(buffer, "SUCCCONF\n") == 0) {
+                server->prevConnFD = newfd;
+                //n = write(server->prevConnFD, "Sucessfully connected\n", 23);
+                n = write(1, "Sucessfully connected\n", 23);
               }
-          } else if(strcmp(buffer, "SUCCCONF\n") == 0) {
-            server->prevConnFD = newfd;
-            //n = write(server->prevConnFD, "Sucessfully connected\n", 23);
-            n = write(1, "Sucessfully connected\n", 23);
+            }
+            printServerData(server);
           }
         }
-        printServerData(server);
       }
+      printf("End for %d %d\n", i, client_sockets[i]);
     }
+    printf("Out of the for\n");
   }
   freeaddrinfo(res); 
   close(fd);
