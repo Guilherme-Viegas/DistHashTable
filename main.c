@@ -44,13 +44,11 @@ int main(int argc, char *argv[]) {
         } else  if(strcmp(strtok(strdup(buffer), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
             sscanf(buffer, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
             printf("Trying to enter\n");
-            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection [MISSING CONFIRMATION IF EXISTS]
+            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
             
             sprintf(buffer, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
             int n = write(myServer->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
             if(n == -1)/*error*/exit(1);
-
-            printf("Sent: %s", buffer); //ERROR: our code doesn't reach this currently
                            
             createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode
         } else if(strcmp(buffer, "exit\n") == 0) {

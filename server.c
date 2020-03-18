@@ -48,10 +48,9 @@ void createServer(Server* server) {
   if(listen(fd,5)==-1)/*error*/exit(1);
 
   while(1) {
-    printf("Linha 51\n");
-
     // Set all sockets to 0
     FD_ZERO(&rfds);
+    
 
     // Add the main socket to set
     FD_SET(fd, &rfds);
@@ -66,22 +65,23 @@ void createServer(Server* server) {
     }
     maxfd = max(client_sockets[0], maxfd);
 
+    // If there's an available previous connection, save it in the file descriptors array and set it
     if(server->prevConnFD > 0) {
       client_sockets[1] = server->prevConnFD;
       FD_SET(server->prevConnFD, &rfds);
     }
     maxfd = max(server->prevConnFD, maxfd);
 
+    // If there's an available next connection, save it in the file descriptors array and set it
     if(server->nextConnFD > 0) {
       client_sockets[2] = server->nextConnFD;
       FD_SET(server->nextConnFD, &rfds);
     }
     maxfd = max(server->nextConnFD, maxfd);
 
-    printf("Linha 81\n");
     counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
     if(counter <=0) exit(1);
-    if(FD_ISSET(STDIN_FILENO , &rfds)) {
+    else if(FD_ISSET(STDIN_FILENO , &rfds)) { // If there's something available to read on the keyboard
       n = read(STDIN_FILENO, buffer, 128);
       if (n > 0) {
         if(strstr(buffer, "leave") != NULL) {
@@ -93,8 +93,8 @@ void createServer(Server* server) {
       }
       continue;
     }
-    printf("Linha 96\n");
 
+    // If something is happening in the main socket, it means there's a new connection 
     if(FD_ISSET(fd, &rfds)) {
       printf("\nGive me some connections baby\n");
       addrlen = sizeof(addr);
@@ -114,10 +114,6 @@ void createServer(Server* server) {
         client_sockets[0] = 0;
     }
 
-    //If only 2 servers and prev and next are the same, only read from one of them
-    if(server->nextConnFD == server->prevConnFD) {
-      client_sockets[2] = 0;
-    }
 
     //Else its on some other socket
     for(int i = 0; i < 3; i++) {
@@ -132,50 +128,66 @@ void createServer(Server* server) {
           write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           //Now check what the incoming message is asking for
           if(strstr(buffer, "NEW") != NULL) {
-            if((server->nextConnFD == 0) && (server->prevConnFD == 0)) { //If there's only 1 server in the ring
-              server->prevConnFD = newfd;
-              server->doubleNextKey = server->myKey;
-              strcpy(server->doubleNextIp, server->myIp);
-              strcpy(server->doubleNextPort, server->myPort);
+            if(newfd == server->nextConnFD) { // If the connection is comming from the next server
+              close(server->nextConnFD);
 
+              //Update double next to current next
+              server->doubleNextKey = server->nextKey;
+              strcpy(server->doubleNextIp, server->nextIp);
+              strcpy(server->doubleNextPort, server->nextPort);
+
+              //Connect to the incoming server
               sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort);
               server->nextConnFD = connectToNextServer(server);
-              n = write(server->nextConnFD, "SUCCCONF\n", 10);
 
+              //Send SUCC and SUCCCONF to previous server
               sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
               n = write(server->prevConnFD, str, strlen(str));
-            } else {
 
+              n = write(server->nextConnFD, "SUCCCONF\n", 10);
+            } else {
+              if((server->nextConnFD == 0) && (server->prevConnFD == 0)) { //If there's only 1 server in the ring
+                // Set the double next as myself
+                server->doubleNextKey = server->myKey;
+                strcpy(server->doubleNextIp, server->myIp);
+                strcpy(server->doubleNextPort, server->myPort);
+
+                // Create a second connection to the incoming server to be used as next
+                sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort);
+                server->nextConnFD = connectToNextServer(server);
+                n = write(server->nextConnFD, "SUCCCONF\n", 10);
+              } else {
+                n = write(server->prevConnFD, buffer, strlen(buffer));
+              }
+              server->prevConnFD = newfd;
+              sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
+              n = write(server->prevConnFD, str, strlen(str));
             }
           } else if(strstr(buffer, "SUCC ") != NULL) {
               sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort);
           } else if(strstr(buffer, "SUCCCONF") != NULL) {
               server->prevConnFD = newfd;
+              n = write(server->prevConnFD, "Ola\n", 5);
           }
         }
       }
+
     }
     printServerData(server);
   }
+  // Close all connections
+  for(int i=0; i<3; i++) {
+    close(client_sockets[i]);
+  }
 
-for(int i=0; i<3; i++) {
-  close(client_sockets[i]);
-}
-
-freeaddrinfo(res); 
-close(fd);
-
-
-}
-
-//For handling the entry of a new server to the ring
-void serverIsEntering(char buffer[128], int *newfd, Server *server) {
-  
+  freeaddrinfo(res); 
+  close(fd);
 }
 
 int connectToNextServer(Server* server) {
-  fd = socket(AF_INET,SOCK_STREAM,0); //TCP socket
-  if (fd == -1) exit(1); //error
+  int tmpFd;
+  tmpFd = socket(AF_INET,SOCK_STREAM,0); //TCP socket
+  if (tmpFd == -1) exit(1); //error
   
   memset(&hints,0,sizeof hints);
   hints.ai_family=AF_INET; //IPv4
@@ -187,13 +199,13 @@ int connectToNextServer(Server* server) {
     exit(1);
   }
   
-  n = connect(fd,res->ai_addr,res->ai_addrlen);
+  n = connect(tmpFd,res->ai_addr,res->ai_addrlen);
   if(n == -1) {
     printf("Error code: %d\n", errno);
     printf("CONNECT ERROR\n");
     exit(1);
   }
-  return fd;
+  return tmpFd;
 }
 
 void printServerData(Server* server) {
