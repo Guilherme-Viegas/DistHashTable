@@ -19,7 +19,7 @@
 #endif
 
 
-int fd,errcode, newfd, client_sockets[8];
+int fd,errcode, newfd, client_sockets[3];
 int maxfd, counter;
 ssize_t n;
 fd_set rfds;
@@ -74,19 +74,17 @@ void createServer(Server* server) {
 
 
     // Add all available child sockets to set
-    for (int i = 0; i < 6; i++) {
-      newfd = client_sockets[i];
-      // If there are available sockets
-      if(newfd > 0) {
-        FD_SET(newfd, &rfds);
-      }
-      // Get the highest file descriptor number
-      if(newfd > maxfd) {
-        maxfd = newfd;
-      }
+    // If there are available sockets
+    if(client_sockets[0] > 0) {
+      FD_SET(client_sockets[0], &rfds);
     }
+    // Get the highest file descriptor number
+    if(client_sockets[0] > maxfd) {
+      maxfd = client_sockets[0];
+    }
+
     if(server->prevConnFD > 0) {
-      client_sockets[6] = server->prevConnFD;
+      client_sockets[1] = server->prevConnFD;
       FD_SET(server->prevConnFD, &rfds);
 
       if(server->prevConnFD > maxfd) {
@@ -95,7 +93,7 @@ void createServer(Server* server) {
     }
 
     if(server->nextConnFD > 0) {
-      client_sockets[7] = server->nextConnFD;
+      client_sockets[2] = server->nextConnFD;
       FD_SET(server->nextConnFD, &rfds);
 
       if(server->nextConnFD > maxfd) {
@@ -103,17 +101,25 @@ void createServer(Server* server) {
       }
     }   
 
+    printf("Linha 104\n");
     counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
-    if(counter <= 0) exit(1);
-
+    if(counter <= 0) {
+      //TODO meter o erro com perror
+      exit(1);
+    }
     else if (FD_ISSET(STDIN_FILENO , &rfds)) { // Read from keyboard
       n = read(STDIN_FILENO, buffer, 128);
       if (n > 0) {
-        if(strstr(buffer, "leave") == 0) {
+        if(strstr(buffer, "leave") != NULL) {
           break;
+        } else if(strstr(buffer, "send") != NULL) {
+          n = write(server->prevConnFD, "Prev\n", 6);
+          n = write(server->nextConnFD, "Next\n", 6);
         }
       }
-    } 
+      continue;
+    }
+    printf("Linha 107\n"); 
 
     // If something is happening in the main socket, it means there's a new connection 
     if(FD_ISSET(fd, &rfds)) {
@@ -123,29 +129,24 @@ void createServer(Server* server) {
                  //inform user of socket number - used in send and receive commands  
       printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , newfd , inet_ntoa(addr.sin_addr) , ntohs (addr.sin_port));   
 
-      for(int i = 0; i < 8; i++) {
-        if(client_sockets[i] == 0) {
-          client_sockets[i] = newfd;
-          break;
-        }
-        if(i == 5) {
+        if(client_sockets[0] == 0) {
+          client_sockets[0] = newfd;
+        } else {
           close(newfd);
         }
-      }
+      
     }
 
-    for (int i = 0; i < 6; i++) {
-      if ((client_sockets[i] == server->nextConnFD) || (client_sockets[i] == server->prevConnFD)) {
-        client_sockets[i] = 0;
+      if ((client_sockets[0] == server->nextConnFD) || (client_sockets[0] == server->prevConnFD)) {
+        client_sockets[0] = 0;
       }
-    }
 
     //Else its on some other socket
-    for(int i = 0; i < 8; i++) { 
+    for(int i = 0; i < 3; i++) { 
       newfd = client_sockets[i];
       printf("Reached for %d %d\n", i, client_sockets[i]);
-      if(i == 7) {
-        if(client_sockets[6] == client_sockets[7]) {
+      if(i == 2) {
+        if(client_sockets[1] == client_sockets[2]) {
           break;
         }
       }
@@ -180,6 +181,11 @@ void createServer(Server* server) {
     }
     printf("Out of the for\n");
   }
+
+  for(int i=0; i<3; i++) {
+    close(client_sockets[i]);
+  }
+
   freeaddrinfo(res); 
   close(fd);
 }
