@@ -85,6 +85,8 @@ void createServer(Server* server) {
       n = read(STDIN_FILENO, buffer, 128);
       if (n > 0) {
         if(strstr(buffer, "leave") != NULL) {
+          close(server->prevConnFD);
+          close(server->nextConnFD);
           break;
         } else if(strstr(buffer, "send") != NULL) {
           n = write(server->prevConnFD, "Prev\n", 6);
@@ -101,12 +103,8 @@ void createServer(Server* server) {
       if((newfd = accept(fd, (struct sockaddr*)&addr, &addrlen)) == -1) exit(1);
                  //inform user of socket number - used in send and receive commands  
       printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , newfd , inet_ntoa(addr.sin_addr) , ntohs (addr.sin_port));   
-
-        if(client_sockets[0] == 0) {
-          client_sockets[0] = newfd;
-        } else {
-          close(newfd);
-        }
+      
+      client_sockets[0] = newfd;
     }
 
     //Prevents from reading the same port 2 times (newfd and some prev or next)
@@ -120,12 +118,24 @@ void createServer(Server* server) {
       newfd = client_sockets[i];
       if(FD_ISSET(newfd, &rfds)) {
         if((n = read(newfd, buffer, 128)) == 0) {
-          close(newfd);
           printf("Connection closed %d\n\n", i);
+          if((server->myKey == server->doubleNextKey) && (newfd == server->nextConnFD)) {
+            server->nextConnFD = -1;
+          } else if(newfd == server->nextConnFD) {
+            copyDoubleToNext(server);
+            server->nextConnFD = connectToNextServer(server);
+
+            sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
+            n = write(server->prevConnFD, str, strlen(str));
+
+            n = write(server->nextConnFD, "SUCCCONF\n", 10);
+          } else if(newfd == server->prevConnFD) {
+            server->prevConnFD = -1;
+          }
           client_sockets[i] = 0;
         } else { 
           buffer[n] = '\0';
-          write(1,"received: ",11); write(1,buffer,n); // Print incoming message
+          //write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           //Now check what the incoming message is asking for
           if(strstr(buffer, "NEW") != NULL) {
             if(newfd == server->nextConnFD) { // If the connection is comming from the next server
@@ -146,7 +156,7 @@ void createServer(Server* server) {
 
               n = write(server->nextConnFD, "SUCCCONF\n", 10);
             } else {
-              if((server->nextConnFD == 0) && (server->prevConnFD == 0)) { //If there's only 1 server in the ring
+              if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If there's only 1 server in the ring
                 // Set the double next as myself
                 server->doubleNextKey = server->myKey;
                 strcpy(server->doubleNextIp, server->myIp);
@@ -166,8 +176,13 @@ void createServer(Server* server) {
           } else if(strstr(buffer, "SUCC ") != NULL) {
               sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort);
           } else if(strstr(buffer, "SUCCCONF") != NULL) {
+            if(server->prevConnFD == -1) {
               server->prevConnFD = newfd;
-              n = write(server->prevConnFD, "Ola\n", 5);
+              sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
+              n = write(server->prevConnFD, str, strlen(str));
+            } else {
+              server->prevConnFD = newfd;
+            }
           }
         }
       }
@@ -175,10 +190,8 @@ void createServer(Server* server) {
     }
     printServerData(server);
   }
-  // Close all connections
-  for(int i=0; i<3; i++) {
-    close(client_sockets[i]);
-  }
+  // Close newfd
+  close(client_sockets[0]);
 
   freeaddrinfo(res); 
   close(fd);
@@ -210,4 +223,10 @@ int connectToNextServer(Server* server) {
 
 void printServerData(Server* server) {
   printf("\n\n myKey: %d\nnextKey: %d\ndoubleNextKey: %d\nnextConnection: %d\nprevConnection: %d\n\n", server->myKey, server->nextKey, server->doubleNextKey, server->nextConnFD, server->prevConnFD);
+}
+
+void copyDoubleToNext(Server * server) {
+  server->nextKey = server->doubleNextKey;
+  strcpy(server->nextIp, server->doubleNextIp);
+  strcpy(server->nextPort, server->doubleNextPort);
 }

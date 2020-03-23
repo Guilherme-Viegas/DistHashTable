@@ -23,6 +23,6 @@ void createServer(Server*);
 int connectToNextServer(Server*);
 void serverIsEntering(char[128], int *, Server*);
 void printServerData(Server*);
-
+void copyDoubleToNext(Server *);
 
 #endif
