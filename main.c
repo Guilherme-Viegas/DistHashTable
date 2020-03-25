@@ -19,6 +19,8 @@
 #include <sys/select.h>
 #include <errno.h>
 
+
+
 int checkIpPortValid(int, char **);
 int valid_digit(char *);
 int checkIp(char *);
@@ -37,8 +39,8 @@ int main(int argc, char *argv[]) {
         char buff[100];
         // Show the user interface
         printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP \n exit\n");
-        fflush(stdin);
-        strcpy(buff, "");
+        // fflush(stdin);
+        // strcpy(buff, "");
         fgets(buff, 100 , stdin);
         const char delim[2] = " ";
         if(strcmp(strtok(strdup(buff), delim), "new") == 0) { // If its the "new" command then create a ring with that server

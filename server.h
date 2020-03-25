@@ -24,5 +24,7 @@ int connectToNextServer(Server*);
 void serverIsEntering(char[128], int *, Server*);
 void printServerData(Server*);
 void copyDoubleToNext(Server *);
+int distance(int, int);
+int connectToGivenServer(char[30], char[10]);
 
 #endif
