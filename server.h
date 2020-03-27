@@ -1,5 +1,8 @@
 #ifndef _SERVER_H
 #define _SERVER_H
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 typedef struct server {
   char myIp[30];
@@ -18,6 +21,11 @@ typedef struct server {
   int nextConnFD; // Holds the TCP connection to next server
 }Server;
 
+typedef struct udpData {
+  struct addrinfo *res;
+  int fd;
+}UdpData;
+
 
 void createServer(Server*);
 int connectToNextServer(Server*);
@@ -26,5 +34,7 @@ void printServerData(Server*);
 void copyDoubleToNext(Server *);
 int distance(int, int);
 int connectToGivenServer(char[30], char[10]);
+UdpData* connectToUdpServer(char ip[30], char port[10]);
+void startKeySearch(Server *, int, int, struct sockaddr*, socklen_t, int);
 
 #endif

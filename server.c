@@ -21,17 +21,18 @@
 #endif
 
 
-int fd,errcode, newfd, searchFd, client_sockets[3];
+int fd,errcode, newfd, searchFd, client_sockets[3], udpFd;
 int maxfd, counter;
 ssize_t n;
 fd_set rfds;
-socklen_t addrlen;
+socklen_t addrlen, udpAddrlen;
 struct addrinfo hints,*res;
-struct sockaddr_in addr;
+struct sockaddr_in addr, udpAddr;
 char buffer[128] = "";
 char str[100] = "";
 int searchKey = -1;
 int tmp;
+int searchFlag = 0;
 
 
 void createServer(Server* server) {
@@ -51,6 +52,22 @@ void createServer(Server* server) {
 
   if(listen(fd,5)==-1)/*error*/exit(1);
 
+  // UDP code
+  udpFd=socket(AF_INET,SOCK_DGRAM,0); //UDP socket
+  if (fd==-1) exit(1); //error
+
+  memset(&hints,0,sizeof hints);
+  hints.ai_family=AF_INET; //IPv4
+  hints.ai_socktype=SOCK_DGRAM; //UDP socket
+  hints.ai_flags=AI_PASSIVE;
+
+  errcode=getaddrinfo(NULL,server->myPort,&hints,&res);
+  if((errcode)!=0)/*error*/exit(1);
+
+  n = bind(udpFd,res->ai_addr,res->ai_addrlen);
+  if(n==-1) /*error*/ exit(1);
+
+
   while(1) {
     // Set all sockets to 0
     FD_ZERO(&rfds);
@@ -58,6 +75,11 @@ void createServer(Server* server) {
     // Add the main socket to set
     FD_SET(fd, &rfds);
     maxfd = fd;
+
+    // Add main UDP socket to set
+    FD_SET(udpFd, &rfds);
+    maxfd = max(fd, udpFd);
+
 
     FD_SET(STDIN_FILENO  , &rfds);
 
@@ -94,19 +116,22 @@ void createServer(Server* server) {
         } else if(strstr(buffer, "find") != NULL) {
             sscanf(buffer, "%s %d", str, &searchKey);
             printf("Distances: %d %d\n", distance(searchKey, server->nextKey), distance(searchKey, server->myKey));
-            if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the received
-              printf("I'm the nearest server (my key: %d) to %d key\n", server->myKey, searchKey);
-            } else if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
-              //Send FND for the successor
-              sprintf(str, "FND %d %d %s %s\n", searchKey, server->myKey, server->myIp, server->myPort);
-              n = write(server->nextConnFD, str, strlen(str));
-              if(n == -1)/*error*/exit(1);
-            } else { //I am the nearest server
-              printf("Server %d is the nearest server of %d\n", server->nextKey, searchKey);
-            }
+            // if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the received
+            //   printf("I'm the nearest server (my key: %d) to %d key\n", server->myKey, searchKey);
+            // } else if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
+            //   //Send FND for the successor
+            //   sprintf(str, "FND %d %d %s %s\n", searchKey, server->myKey, server->myIp, server->myPort);
+            //   n = write(server->nextConnFD, str, strlen(str));
+            //   if(n == -1)/*error*/exit(1);
+            // } else { //I am the nearest server
+            //   printf("Server %d is the nearest server of %d\n", server->nextKey, searchKey);
+            // }
+            startKeySearch(server, searchKey, 0, NULL, 0, 0);
         } else if(strstr(buffer, "send") != NULL) {
           n = write(server->prevConnFD, "Prev\n", 6);
           n = write(server->nextConnFD, "Next\n", 6);
+        } else if(strstr(buffer, "show") != NULL) {
+          printServerData(server);
         }
       }
       continue;
@@ -121,6 +146,15 @@ void createServer(Server* server) {
       printf("New connection , socket fd is %d , ip is : %s , port : %d \n" , newfd , inet_ntoa(addr.sin_addr) , ntohs (addr.sin_port));   
       
       client_sockets[0] = newfd;
+    }
+
+    if(FD_ISSET(udpFd, &rfds)) {
+      udpAddrlen = sizeof(udpAddr);
+      n=recvfrom(udpFd,buffer,128,0, (struct sockaddr*)&udpAddr,&udpAddrlen);
+      if(n==-1)/*error*/exit(1);
+      sscanf("%s %d", str, &searchKey);
+      startKeySearch(server, searchKey, 1, (struct sockaddr*)&addr,addrlen, udpFd);
+      searchFlag = 1;
     }
 
     //Prevents from reading the same port 2 times (newfd and some prev or next)
@@ -216,7 +250,12 @@ void createServer(Server* server) {
             }
           } else if(strstr(buffer, "KEY ") != NULL) {
             sscanf(buffer, "%s %d %d %s %s", str, &searchKey, &tmp, str, str);
-            printf("Received Key from: %d\n", tmp);
+            printf("Received from %d\n", tmp);
+            if(searchFlag == 1) {
+              sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, server->nextKey, server->nextIp, server->nextPort);
+              n = sendto(fd,buffer,strlen(buffer),0, (struct sockaddr*)&addr, addrlen);
+            }
+            searchFlag = 0;
           }
         }
       }
@@ -296,5 +335,40 @@ int distance(int k, int l) {
     return count%N;
   } else {
     return count%N;
+  }
+}
+
+UdpData* connectToUdpServer(char ip[30], char port[10]) {
+  UdpData *udp = (UdpData*)malloc(sizeof(UdpData));
+  udp->fd = socket(AF_INET,SOCK_DGRAM,0); //TCP socket
+  if (udp->fd == -1) exit(1); //error
+  
+  memset(&hints,0,sizeof hints);
+  hints.ai_family=AF_INET; //IPv4
+  hints.ai_socktype=SOCK_DGRAM; //TCP socket
+  
+  errcode = getaddrinfo(ip, port,&hints,&(udp->res));
+  if(errcode != 0) {
+    printf("GET ADDRESS INFO ERROR\n");
+    exit(1);
+  }
+  
+  return udp;
+}
+
+void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* addr, socklen_t addrlen, int fd) {
+  if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the received
+    printf("I'm the nearest server (my key: %d) to %d key\n", server->myKey, searchKey);
+  } else if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
+    //Send FND for the successor
+    sprintf(str, "FND %d %d %s %s\n", searchKey, server->myKey, server->myIp, server->myPort);
+    n = write(server->nextConnFD, str, strlen(str));
+    if(n == -1)/*error*/exit(1);
+  } else { //I am the nearest server
+    printf("Server %d is the nearest server of %d\n", server->nextKey, searchKey);
+    if(entry == 1) {
+      sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, server->nextKey, server->nextIp, server->nextPort);
+      n = sendto(fd,buffer,strlen(buffer),0, addr, addrlen);
+    }
   }
 }

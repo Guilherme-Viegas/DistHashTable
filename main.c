@@ -24,8 +24,14 @@
 int checkIpPortValid(int, char **);
 int valid_digit(char *);
 int checkIp(char *);
+void flush_stdin();
+
 char aux[100];
 char c;
+int n;
+
+struct addrinfo *res;
+UdpData* udp;
 
 
 int main(int argc, char *argv[]) {
@@ -38,9 +44,9 @@ int main(int argc, char *argv[]) {
     while(1) { // The code will run until the "exit" command is summoned
         char buff[100];
         // Show the user interface
-        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP \n exit\n");
-        // fflush(stdin);
-        // strcpy(buff, "");
+        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n show\n find k\n leave\n exit\n");
+
+        flush_stdin(); //TODO not doing what we want
         fgets(buff, 100 , stdin);
         const char delim[2] = " ";
         if(strcmp(strtok(strdup(buff), delim), "new") == 0) { // If its the "new" command then create a ring with that server
@@ -56,11 +62,29 @@ int main(int argc, char *argv[]) {
             if(n == -1)/*error*/exit(1);
                            
             createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode
-        } else if(strcmp(buff, "exit\n") == 0) {
+            flush_stdin();
+        } else if(strcmp(strtok(strdup(buff), delim), "entry") == 0) {
+            char connectIp[100], connectPort[100];
+            int connectKey;
+            sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &connectKey, connectIp, connectPort); // Get the successor details
+            udp = connectToUdpServer(connectIp, connectPort);
+
+            sprintf(buff, "EFND %d\n", myServer->myKey);
+            n=sendto(udp->fd,buff,strlen(buff),0, udp->res->ai_addr, udp->res->ai_addrlen);
+            if(n==-1) /*error*/ exit(1);
+
+            n=recvfrom(udp->fd,buff,128,0, (struct sockaddr*)&(udp->res->ai_addr),&(udp->res->ai_addrlen));
+            if(n==-1) /*error*/ exit(1);
+
+
+            printf("%s", buff);
+
+
+            
+            freeaddrinfo(udp->res);
+            close(udp->fd);
+        } else if(strcmp(strtok(strdup(buff), delim), "exit") == 0) {
             exit(0);
-        } else {
-            printf("Lixo: %s\n", buff);
-            //TODO O stdin está a ficar com lixo, ou seja com o NEW que vem da linha 50
         }
     }
 
@@ -128,4 +152,10 @@ int checkIp(char * ip) {
         return 0; 
     }
     return 1; 
+}
+
+void flush_stdin() {
+    char c;
+    ungetc('\n', stdin); // ensure that stdin is always dirty
+    while(((c = getchar()) != '\n') && (c != EOF));
 }
