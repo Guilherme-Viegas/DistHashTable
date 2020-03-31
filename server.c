@@ -107,25 +107,13 @@ void createServer(Server* server) {
     counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
     if(counter <=0) exit(1);
     else if(FD_ISSET(STDIN_FILENO , &rfds)) { // If there's something available to read on the keyboard
-      n = read(STDIN_FILENO, buffer, 128);
-      if (n > 0) {
+      fgets(buffer, 100 , stdin);
         if(strstr(buffer, "leave") != NULL) {
           close(server->prevConnFD);
           close(server->nextConnFD);
           break;
         } else if(strstr(buffer, "find") != NULL) {
             sscanf(buffer, "%s %d", str, &searchKey);
-            printf("Distances: %d %d\n", distance(searchKey, server->nextKey), distance(searchKey, server->myKey));
-            // if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the received
-            //   printf("I'm the nearest server (my key: %d) to %d key\n", server->myKey, searchKey);
-            // } else if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
-            //   //Send FND for the successor
-            //   sprintf(str, "FND %d %d %s %s\n", searchKey, server->myKey, server->myIp, server->myPort);
-            //   n = write(server->nextConnFD, str, strlen(str));
-            //   if(n == -1)/*error*/exit(1);
-            // } else { //I am the nearest server
-            //   printf("Server %d is the nearest server of %d\n", server->nextKey, searchKey);
-            // }
             startKeySearch(server, searchKey, 0, NULL, 0, 0);
         } else if(strstr(buffer, "send") != NULL) {
           n = write(server->prevConnFD, "Prev\n", 6);
@@ -133,13 +121,11 @@ void createServer(Server* server) {
         } else if(strstr(buffer, "show") != NULL) {
           printServerData(server);
         }
-      }
       continue;
     }
 
     // If something is happening in the main socket, it means there's a new connection 
     if(FD_ISSET(fd, &rfds)) {
-      printf("\nGive me some connections baby\n");
       addrlen = sizeof(addr);
       if((newfd = accept(fd, (struct sockaddr*)&addr, &addrlen)) == -1) exit(1);
                  //inform user of socket number - used in send and receive commands  
@@ -148,12 +134,12 @@ void createServer(Server* server) {
       client_sockets[0] = newfd;
     }
 
+    //If is receiving an udp connection, so it starts a key search
     if(FD_ISSET(udpFd, &rfds)) {
       udpAddrlen = sizeof(udpAddr);
       n=recvfrom(udpFd,buffer,128,0, (struct sockaddr*)&udpAddr,&udpAddrlen);
       if(n==-1)/*error*/exit(1);
       sscanf(buffer, "%s %d", str, &searchKey);
-      printf("Linha 156 %d\n", searchKey);
       startKeySearch(server, searchKey, 1, (struct sockaddr*)&udpAddr,udpAddrlen, udpFd);
       searchFlag = 1;
     }
@@ -171,8 +157,11 @@ void createServer(Server* server) {
         if((n = read(newfd, buffer, 128)) == 0) {
           printf("Connection closed %d\n\n", i);
           if((server->myKey == server->doubleNextKey) && (newfd == server->nextConnFD)) {
+            //If there are only 2 servers in the ring...
+            close(server->nextConnFD);
             server->nextConnFD = -1;
           } else if(newfd == server->nextConnFD) {
+            close(server->nextConnFD);
             copyDoubleToNext(server);
             server->nextConnFD = connectToNextServer(server);
 
@@ -181,27 +170,25 @@ void createServer(Server* server) {
 
             n = write(server->nextConnFD, "SUCCCONF\n", 10);
           } else if(newfd == server->prevConnFD) {
+            close(server->prevConnFD);
             server->prevConnFD = -1;
           }
           client_sockets[i] = 0;
         } else { 
           buffer[n] = '\0';
-          //write(1,"received: ",11); write(1,buffer,n); // Print incoming message
           //Now check what the incoming message is asking for
           if(strstr(buffer, "NEW") != NULL) {
             if(newfd == server->nextConnFD) { // If the connection is comming from the next server
               close(server->nextConnFD);
 
               //Update double next to current next
-              server->doubleNextKey = server->nextKey;
-              strcpy(server->doubleNextIp, server->nextIp);
-              strcpy(server->doubleNextPort, server->nextPort);
+              copyNextToDouble(server);
 
               //Connect to the incoming server
               sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort);
               server->nextConnFD = connectToNextServer(server);
 
-              //Send SUCC and SUCCCONF to previous server
+              //Send SUCC and SUCCCONF to previous and next server
               sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
               n = write(server->prevConnFD, str, strlen(str));
 
@@ -209,9 +196,7 @@ void createServer(Server* server) {
             } else {
               if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If there's only 1 server in the ring
                 // Set the double next as myself
-                server->doubleNextKey = server->myKey;
-                strcpy(server->doubleNextIp, server->myIp);
-                strcpy(server->doubleNextPort, server->myPort);
+                copyDoubleToSelf(server);
 
                 // Create a second connection to the incoming server to be used as next
                 sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort);
@@ -243,7 +228,6 @@ void createServer(Server* server) {
                 n = write(server->nextConnFD, buffer, strlen(buffer));
                 if(n == -1)/*error*/exit(1);
             } else { //I am the nearest server
-                printf("Linha 210\n");
                 searchFd = connectToGivenServer(ip, port);
                 sprintf(str, "KEY %d %d %s %s\n", searchKey, server->nextKey, server->nextIp, server->nextPort);
                 n = write(searchFd, str, strlen(str));
@@ -327,6 +311,18 @@ void copyDoubleToNext(Server * server) {
   server->nextKey = server->doubleNextKey;
   strcpy(server->nextIp, server->doubleNextIp);
   strcpy(server->nextPort, server->doubleNextPort);
+}
+
+void copyNextToDouble(Server *server) {
+  server->doubleNextKey = server->nextKey;
+  strcpy(server->doubleNextIp, server->nextIp);
+  strcpy(server->doubleNextPort, server->nextPort);
+}
+
+void copyDoubleToSelf(Server *server) {
+  server->doubleNextKey = server->myKey;
+  strcpy(server->doubleNextIp, server->myIp);
+  strcpy(server->doubleNextPort, server->myPort);
 }
 
 int distance(int k, int l) {

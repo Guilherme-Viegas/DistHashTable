@@ -36,5 +36,7 @@ int distance(int, int);
 int connectToGivenServer(char[30], char[10]);
 UdpData* connectToUdpServer(char ip[30], char port[10]);
 void startKeySearch(Server *, int, int, struct sockaddr*, socklen_t, int);
+void copyNextToDouble(Server *server);
+void copyDoubleToSelf(Server *server);
 
 #endif
