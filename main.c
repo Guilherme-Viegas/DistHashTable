@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     while(1) { // The code will run until the "exit" command is summoned
         char buff[100];
         // Show the user interface
-        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n show\n find k\n leave\n exit\n");
+        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n entry i succi succie.IP succi.TCP\n show\n find k\n leave\n exit\n");
 
         flush_stdin(); //TODO not doing what we want
         fgets(buff, 100 , stdin);
@@ -77,10 +77,16 @@ int main(int argc, char *argv[]) {
             if(n==-1) /*error*/ exit(1);
 
 
-            printf("%s", buff);
-
-
+            sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
+            printf("Trying to enter\n");
+            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
             
+            sprintf(buff, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
+            int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
+            if(n == -1)/*error*/exit(1);
+                           
+            createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode
+
             freeaddrinfo(udp->res);
             close(udp->fd);
         } else if(strcmp(strtok(strdup(buff), delim), "exit") == 0) {

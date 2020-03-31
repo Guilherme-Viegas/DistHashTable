@@ -54,7 +54,7 @@ void createServer(Server* server) {
 
   // UDP code
   udpFd=socket(AF_INET,SOCK_DGRAM,0); //UDP socket
-  if (fd==-1) exit(1); //error
+  if (udpFd==-1) exit(1); //error
 
   memset(&hints,0,sizeof hints);
   hints.ai_family=AF_INET; //IPv4
@@ -152,8 +152,9 @@ void createServer(Server* server) {
       udpAddrlen = sizeof(udpAddr);
       n=recvfrom(udpFd,buffer,128,0, (struct sockaddr*)&udpAddr,&udpAddrlen);
       if(n==-1)/*error*/exit(1);
-      sscanf("%s %d", str, &searchKey);
-      startKeySearch(server, searchKey, 1, (struct sockaddr*)&addr,addrlen, udpFd);
+      sscanf(buffer, "%s %d", str, &searchKey);
+      printf("Linha 156 %d\n", searchKey);
+      startKeySearch(server, searchKey, 1, (struct sockaddr*)&udpAddr,udpAddrlen, udpFd);
       searchFlag = 1;
     }
 
@@ -249,13 +250,13 @@ void createServer(Server* server) {
                 if(n == -1)/*error*/exit(1);
             }
           } else if(strstr(buffer, "KEY ") != NULL) {
-            sscanf(buffer, "%s %d %d %s %s", str, &searchKey, &tmp, str, str);
+            int connectKey;
+            char connectIp[30], connectPort[10];
+            sscanf(buffer, "%s %d %d %s %s", str, &searchKey, &connectKey, connectIp, connectPort);
             printf("Received from %d\n", tmp);
-            if(searchFlag == 1) {
-              sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, server->nextKey, server->nextIp, server->nextPort);
-              n = sendto(fd,buffer,strlen(buffer),0, (struct sockaddr*)&addr, addrlen);
-            }
-            searchFlag = 0;
+
+            sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, connectKey, connectIp, connectPort);
+            n = sendto(udpFd,buffer,strlen(buffer),0, (struct sockaddr*)&udpAddr, udpAddrlen);
           }
         }
       }
@@ -356,7 +357,7 @@ UdpData* connectToUdpServer(char ip[30], char port[10]) {
   return udp;
 }
 
-void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* addr, socklen_t addrlen, int fd) {
+void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* udpAddr, socklen_t udpAddrlen, int fd) {
   if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the received
     printf("I'm the nearest server (my key: %d) to %d key\n", server->myKey, searchKey);
   } else if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
@@ -368,7 +369,7 @@ void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* 
     printf("Server %d is the nearest server of %d\n", server->nextKey, searchKey);
     if(entry == 1) {
       sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, server->nextKey, server->nextIp, server->nextPort);
-      n = sendto(fd,buffer,strlen(buffer),0, addr, addrlen);
+      n = sendto(fd,buffer,strlen(buffer),0, udpAddr, udpAddrlen);
     }
   }
 }
