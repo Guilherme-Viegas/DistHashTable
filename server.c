@@ -35,7 +35,7 @@ int tmp;
 int searchFlag = 0;
 
 
-void createServer(Server* server) {
+void createServer(Server* server, int _onGoingOperation) {
   fd=socket(AF_INET,SOCK_STREAM,0); //TCP socket
   if (fd==-1) exit(1); //error
 
@@ -67,22 +67,27 @@ void createServer(Server* server) {
   n = bind(udpFd,res->ai_addr,res->ai_addrlen);
   if(n==-1) /*error*/ exit(1);
 
+  int ongoingOperation = _onGoingOperation;
+  int serverInRing = 1;
 
   while(1) {
     // Set all sockets to 0
     FD_ZERO(&rfds);
 
-    // Add the main socket to set
-    FD_SET(fd, &rfds);
-    maxfd = fd;
+    // We only check the main sockets if the server is in the ring, 
+    // if a server is not in the ring it cannot receive connections
+    if(serverInRing == 1) {
+      // Add the main socket to set
+      FD_SET(fd, &rfds);
+      maxfd = fd;
 
-    // Add main UDP socket to set
-    FD_SET(udpFd, &rfds);
-    maxfd = max(fd, udpFd);
-
+      // Add main UDP socket to set
+      FD_SET(udpFd, &rfds);
+      maxfd = max(fd, udpFd);
+    }
 
     FD_SET(STDIN_FILENO  , &rfds);
-
+    maxfd = max(STDIN_FILENO, maxfd);
     // Add all available child sockets to set
     // If there are available sockets
     if(client_sockets[0] > 0) {
@@ -94,6 +99,8 @@ void createServer(Server* server) {
     if(server->prevConnFD > 0) {
       client_sockets[1] = server->prevConnFD;
       FD_SET(server->prevConnFD, &rfds);
+    } else {
+      client_sockets[1] = -1;
     }
     maxfd = max(server->prevConnFD, maxfd);
 
@@ -101,25 +108,64 @@ void createServer(Server* server) {
     if(server->nextConnFD > 0) {
       client_sockets[2] = server->nextConnFD;
       FD_SET(server->nextConnFD, &rfds);
+    } else {
+      client_sockets[2] = -1;
     }
     maxfd = max(server->nextConnFD, maxfd);
+
+    if(ongoingOperation == 0) { //If there's no operation going on at the moment, print the menu
+      if(serverInRing == 1) 
+        printf("\n show\n find k\n leave\n");
+      else
+        printf("\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n entry i succi succie.IP succi.TCP\n exit\n");
+    } else {
+      printf("Linha 122\n");
+    }
 
     counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
     if(counter <=0) exit(1);
     else if(FD_ISSET(STDIN_FILENO , &rfds)) { // If there's something available to read on the keyboard
       fgets(buffer, 100 , stdin);
-        if(strstr(buffer, "leave") != NULL) {
-          close(server->prevConnFD);
-          close(server->nextConnFD);
-          break;
-        } else if(strstr(buffer, "find") != NULL) {
-            sscanf(buffer, "%s %d", str, &searchKey);
-            startKeySearch(server, searchKey, 0, NULL, 0, 0);
-        } else if(strstr(buffer, "send") != NULL) {
-          n = write(server->prevConnFD, "Prev\n", 6);
-          n = write(server->nextConnFD, "Next\n", 6);
-        } else if(strstr(buffer, "show") != NULL) {
-          printServerData(server);
+        if(serverInRing == 1) {
+          if(strstr(buffer, "leave") != NULL) {
+            if((server->nextConnFD > 0) && (server->prevConnFD > 0)) { // If there's only one server in the ring
+              close(server->prevConnFD);
+              close(server->nextConnFD);
+            }
+            serverInRing = 0;
+            printf("Linha 136\n");
+            cleanServer(server);
+          } else if(strstr(buffer, "find") != NULL) {
+              sscanf(buffer, "%s %d", str, &searchKey);
+              ongoingOperation = 1;
+              startKeySearch(server, searchKey, 0, NULL, 0, 0, &ongoingOperation);
+          } else if(strstr(buffer, "send") != NULL) {
+            n = write(server->prevConnFD, "Prev\n", 6);
+            n = write(server->nextConnFD, "Next\n", 6);
+          } else if(strstr(buffer, "show") != NULL) {
+            printServerData(server);
+          }
+        } else {
+            printf("Linha 142\n");
+            if(strstr(buffer, "new") != NULL) {
+              sscanf(buffer, "%s %d", str, &(server->myKey));
+              serverInRing = 1;
+            } else if(strstr(buffer, "sentry ")) {
+              sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
+              printf("Trying to enter\n");
+              server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
+              
+              sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
+              int n = write(server->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
+              if(n == -1)/*error*/exit(1);
+
+              serverInRing = 1;
+              ongoingOperation = 1;
+            } else if(strstr(buffer, "entry ")) {
+
+            } else if(strstr(buffer, "exit")) {
+
+            }
         }
       continue;
     }
@@ -140,7 +186,7 @@ void createServer(Server* server) {
       n=recvfrom(udpFd,buffer,128,0, (struct sockaddr*)&udpAddr,&udpAddrlen);
       if(n==-1)/*error*/exit(1);
       sscanf(buffer, "%s %d", str, &searchKey);
-      startKeySearch(server, searchKey, 1, (struct sockaddr*)&udpAddr,udpAddrlen, udpFd);
+      startKeySearch(server, searchKey, 1, (struct sockaddr*)&udpAddr,udpAddrlen, udpFd, &ongoingOperation);
       searchFlag = 1;
     }
 
@@ -148,6 +194,12 @@ void createServer(Server* server) {
     if ((client_sockets[0] == server->nextConnFD) || (client_sockets[0] == server->prevConnFD)) {
         client_sockets[0] = 0;
     }
+
+    for(int i = 0; i < 3; i++) {
+      printf("Fd: %d\n", client_sockets[i]);
+    }
+
+    printf("Next: %d | Prev: %d", server->nextConnFD, server->prevConnFD);
 
 
     //Else its on some other socket
@@ -160,6 +212,9 @@ void createServer(Server* server) {
             //If there are only 2 servers in the ring...
             close(server->nextConnFD);
             server->nextConnFD = -1;
+            int auxKey = server->myKey;
+            cleanServer(server);
+            server->myKey = auxKey;
           } else if(newfd == server->nextConnFD) {
             close(server->nextConnFD);
             copyDoubleToNext(server);
@@ -176,6 +231,7 @@ void createServer(Server* server) {
           client_sockets[i] = 0;
         } else { 
           buffer[n] = '\0';
+          write(1, "Received: ", 11); write(1, buffer, sizeof(buffer));
           //Now check what the incoming message is asking for
           if(strstr(buffer, "NEW") != NULL) {
             if(newfd == server->nextConnFD) { // If the connection is comming from the next server
@@ -196,7 +252,7 @@ void createServer(Server* server) {
             } else {
               if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If there's only 1 server in the ring
                 // Set the double next as myself
-                copyDoubleToSelf(server);
+                copySelfToDouble(server);
 
                 // Create a second connection to the incoming server to be used as next
                 sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort);
@@ -219,6 +275,8 @@ void createServer(Server* server) {
             } else {
               server->prevConnFD = newfd;
             }
+            ongoingOperation = 0;
+            printf("Linha 266\n");
           } else if(strstr(buffer, "FND ") != NULL) {
               char ip[30], port[10];
               printf("%s \n", buffer);
@@ -237,10 +295,10 @@ void createServer(Server* server) {
             int connectKey;
             char connectIp[30], connectPort[10];
             sscanf(buffer, "%s %d %d %s %s", str, &searchKey, &connectKey, connectIp, connectPort);
-            printf("Received from %d\n", tmp);
 
             sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, connectKey, connectIp, connectPort);
             n = sendto(udpFd,buffer,strlen(buffer),0, (struct sockaddr*)&udpAddr, udpAddrlen);
+            ongoingOperation = 0;
           }
         }
       }
@@ -319,7 +377,7 @@ void copyNextToDouble(Server *server) {
   strcpy(server->doubleNextPort, server->nextPort);
 }
 
-void copyDoubleToSelf(Server *server) {
+void copySelfToDouble(Server *server) {
   server->doubleNextKey = server->myKey;
   strcpy(server->doubleNextIp, server->myIp);
   strcpy(server->doubleNextPort, server->myPort);
@@ -353,9 +411,14 @@ UdpData* connectToUdpServer(char ip[30], char port[10]) {
   return udp;
 }
 
-void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* udpAddr, socklen_t udpAddrlen, int fd) {
-  if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the received
+void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* udpAddr, socklen_t udpAddrlen, int fd, int *_onGoingOperation) {
+  if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the ring
     printf("I'm the nearest server (my key: %d) to %d key\n", server->myKey, searchKey);
+    if(entry == 1) {
+      sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, server->myKey, server->myIp, server->myPort);
+      n = sendto(fd,buffer,strlen(buffer),0, udpAddr, udpAddrlen);
+    }
+    *_onGoingOperation = 0;
   } else if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
     //Send FND for the successor
     sprintf(str, "FND %d %d %s %s\n", searchKey, server->myKey, server->myIp, server->myPort);
@@ -368,4 +431,19 @@ void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* 
       n = sendto(fd,buffer,strlen(buffer),0, udpAddr, udpAddrlen);
     }
   }
+}
+
+void cleanServer(Server * server) {
+  server->myKey = 0;
+
+  strcpy(server->nextIp, "");
+  strcpy(server->nextPort, "");
+  server->nextKey = 0;
+
+  strcpy(server->doubleNextIp, "");
+  strcpy(server->doubleNextPort, "");
+  server->doubleNextKey = 0;
+
+  server->prevConnFD = 0;
+  server->nextConnFD = 0;
 }

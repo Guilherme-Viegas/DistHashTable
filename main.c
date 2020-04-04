@@ -29,6 +29,7 @@ void flush_stdin();
 char aux[100];
 char c;
 int n;
+char buff[100];
 
 struct addrinfo *res;
 UdpData* udp;
@@ -41,17 +42,16 @@ int main(int argc, char *argv[]) {
     strcpy(myServer->myPort, argv[2]);
       
 
-    while(1) { // The code will run until the "exit" command is summoned
-        char buff[100];
+    //while(1) { // The code will run until the "exit" command is summoned
         // Show the user interface
-        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n entry i succi succie.IP succi.TCP\n show\n find k\n leave\n exit\n");
-
-        flush_stdin(); //TODO not doing what we want
+        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n entry i succi succie.IP succi.TCP\n leave\n exit\n");
+        
+        strcpy(buff, "\0");
         fgets(buff, 100 , stdin);
         const char delim[2] = " ";
         if(strcmp(strtok(strdup(buff), delim), "new") == 0) { // If its the "new" command then create a ring with that server
             sscanf(buff, "%s %d", aux, &(myServer->myKey)); // Get the server key
-            createServer(myServer);
+            createServer(myServer, 0);
         } else  if(strcmp(strtok(strdup(buff), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
             sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
             printf("Trying to enter\n");
@@ -61,8 +61,7 @@ int main(int argc, char *argv[]) {
             int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
             if(n == -1)/*error*/exit(1);
                            
-            createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode
-            flush_stdin();
+            createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
         } else if(strcmp(strtok(strdup(buff), delim), "entry") == 0) {
             char connectIp[100], connectPort[100];
             int connectKey;
@@ -85,14 +84,14 @@ int main(int argc, char *argv[]) {
             int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
             if(n == -1)/*error*/exit(1);
                            
-            createServer(myServer); //Now that the entry connections are established and stable it's time enter in listening mode
+            createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
 
             freeaddrinfo(udp->res);
             close(udp->fd);
-        } else if(strcmp(strtok(strdup(buff), delim), "exit") == 0) {
+        } else if(strstr(buff, "exit") != NULL) {
             exit(0);
         }
-    }
+    //}
 
     return 0;
 }

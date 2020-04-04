@@ -27,7 +27,7 @@ typedef struct udpData {
 }UdpData;
 
 
-void createServer(Server*);
+void createServer(Server*, int);
 int connectToNextServer(Server*);
 void serverIsEntering(char[128], int *, Server*);
 void printServerData(Server*);
@@ -35,8 +35,9 @@ void copyDoubleToNext(Server *);
 int distance(int, int);
 int connectToGivenServer(char[30], char[10]);
 UdpData* connectToUdpServer(char ip[30], char port[10]);
-void startKeySearch(Server *, int, int, struct sockaddr*, socklen_t, int);
+void startKeySearch(Server *, int, int, struct sockaddr*, socklen_t, int, int *);
 void copyNextToDouble(Server *server);
-void copyDoubleToSelf(Server *server);
+void copySelfToDouble(Server *server);
+void cleanServer(Server * server);
 
 #endif
