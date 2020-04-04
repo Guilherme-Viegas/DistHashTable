@@ -142,10 +142,8 @@ void createServer(Server* server, int _onGoingOperation) {
               ongoingOperation = 1;
               startKeySearch(server, searchKey, 0, NULL, 0, 0, &ongoingOperation);
           } else if(strstr(buffer, "send") != NULL) {
-            n = write(server->prevConnFD, "Prev\n", 6);
-            // tcpWrite(server->prevConnFD, "Prev\n");
-            n = write(server->nextConnFD, "Next\n", 6);
-            // tcpWrite(server->nextConnFD, "Next\n");
+            tcpWrite(server->prevConnFD, "Prev\n");
+            tcpWrite(server->nextConnFD, "Next\n");
           } else if(strstr(buffer, "show") != NULL) {
             printServerData(server);
           }
@@ -160,8 +158,7 @@ void createServer(Server* server, int _onGoingOperation) {
               server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
               
               sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
-              int n = write(server->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
-              if(n == -1)/*error*/exit(1);
+              tcpWrite(server->nextConnFD, buffer); // Give the successor your details
 
               serverInRing = 1;
               ongoingOperation = 1;
@@ -184,8 +181,7 @@ void createServer(Server* server, int _onGoingOperation) {
               server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
               
               sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
-              int n = write(server->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
-              if(n == -1)/*error*/exit(1);
+              tcpWrite(server->nextConnFD, buffer);  // Give the successor your details
 
               serverInRing = 1;
               ongoingOperation = 1;
@@ -221,12 +217,6 @@ void createServer(Server* server, int _onGoingOperation) {
         client_sockets[0] = 0;
     }
 
-    for(int i = 0; i < 3; i++) {
-      printf("Fd: %d\n", client_sockets[i]);
-    }
-
-    printf("Next: %d | Prev: %d", server->nextConnFD, server->prevConnFD);
-
 
     //Else its on some other socket
     for(int i = 0; i < 3; i++) {
@@ -247,9 +237,9 @@ void createServer(Server* server, int _onGoingOperation) {
             server->nextConnFD = connectToNextServer(server);
 
             sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
-            n = write(server->prevConnFD, str, strlen(str));
+            tcpWrite(server->prevConnFD, str);
 
-            n = write(server->nextConnFD, "SUCCCONF\n", 10);
+            tcpWrite(server->prevConnFD, "SUCCCONF\n");
           } else if(newfd == server->prevConnFD) {
             close(server->prevConnFD);
             server->prevConnFD = -1;
@@ -272,9 +262,9 @@ void createServer(Server* server, int _onGoingOperation) {
 
               //Send SUCC and SUCCCONF to previous and next server
               sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
-              n = write(server->prevConnFD, str, strlen(str));
-
-              n = write(server->nextConnFD, "SUCCCONF\n", 10);
+              tcpWrite(server->prevConnFD, str);
+              
+              tcpWrite(server->nextConnFD, "SUCCCONF\n");
             } else {
               if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If there's only 1 server in the ring
                 // Set the double next as myself
@@ -283,13 +273,13 @@ void createServer(Server* server, int _onGoingOperation) {
                 // Create a second connection to the incoming server to be used as next
                 sscanf(buffer, "%s %d %s %s", str, &(server->nextKey), server->nextIp, server->nextPort);
                 server->nextConnFD = connectToNextServer(server);
-                n = write(server->nextConnFD, "SUCCCONF\n", 10);
+                tcpWrite(server->nextConnFD, "SUCCCONF\n");
               } else {
-                n = write(server->prevConnFD, buffer, strlen(buffer));
+                tcpWrite(server->prevConnFD, buffer);
               }
               server->prevConnFD = newfd;
               sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
-              n = write(server->prevConnFD, str, strlen(str));
+              tcpWrite(server->prevConnFD, str);
             }
           } else if(strstr(buffer, "SUCC ") != NULL) {
               sscanf(buffer, "%s %d %s %s", str, &(server->doubleNextKey), server->doubleNextIp, server->doubleNextPort);
@@ -297,7 +287,7 @@ void createServer(Server* server, int _onGoingOperation) {
             if(server->prevConnFD == -1) {
               server->prevConnFD = newfd;
               sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
-              n = write(server->prevConnFD, str, strlen(str));
+              tcpWrite(server->prevConnFD, str);
             } else {
               server->prevConnFD = newfd;
             }
@@ -309,13 +299,11 @@ void createServer(Server* server, int _onGoingOperation) {
               sscanf(buffer, "%s %d %d %s %s", str, &searchKey, &tmp, ip, port);
               if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
                 //Send FND for the successor
-                n = write(server->nextConnFD, buffer, strlen(buffer));
-                if(n == -1)/*error*/exit(1);
+                tcpWrite(server->nextConnFD, buffer);
             } else { //I am the nearest server
                 searchFd = connectToGivenServer(ip, port);
                 sprintf(str, "KEY %d %d %s %s\n", searchKey, server->nextKey, server->nextIp, server->nextPort);
-                n = write(searchFd, str, strlen(str));
-                if(n == -1)/*error*/exit(1);
+                tcpWrite(searchFd, str);
             }
           } else if(strstr(buffer, "KEY ") != NULL) {
             int connectKey;
@@ -485,5 +473,17 @@ void tcpWrite(int toWriteFd, char * strToWrite) {
     }
     nleft-=nwritten;
     strToWrite += nwritten;
+  }
+}
+
+int tpcRead(int toReadFd, char * bufferToRead) {
+  int nread, nleft;
+  nleft = strlen(bufferToRead);
+  while(nleft > 0) {
+    nread = read(toReadFd, bufferToRead, strlen(bufferToRead));
+    if (nread == -1) return -1;
+    if(nread == 0) return 0;
+    nleft -= nread;
+    bufferToRead += nread;
   }
 }

@@ -40,5 +40,6 @@ void copyNextToDouble(Server *server);
 void copySelfToDouble(Server *server);
 void cleanServer(Server * server);
 void tcpWrite(int, char *);
+int tpcRead(int, char *);
 
 #endif
