@@ -39,5 +39,6 @@ void startKeySearch(Server *, int, int, struct sockaddr*, socklen_t, int, int *)
 void copyNextToDouble(Server *server);
 void copySelfToDouble(Server *server);
 void cleanServer(Server * server);
+void tcpWrite(int, char *);
 
 #endif

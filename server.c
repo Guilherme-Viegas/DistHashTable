@@ -21,7 +21,7 @@
 #endif
 
 
-int fd,errcode, newfd, searchFd, client_sockets[3], udpFd;
+int fd,errcode, newfd, searchFd, client_sockets[3], udpFd, udpFdTemp;
 int maxfd, counter;
 ssize_t n;
 fd_set rfds;
@@ -33,6 +33,8 @@ char str[100] = "";
 int searchKey = -1;
 int tmp;
 int searchFlag = 0;
+UdpData* udp;
+
 
 
 void createServer(Server* server, int _onGoingOperation) {
@@ -141,7 +143,9 @@ void createServer(Server* server, int _onGoingOperation) {
               startKeySearch(server, searchKey, 0, NULL, 0, 0, &ongoingOperation);
           } else if(strstr(buffer, "send") != NULL) {
             n = write(server->prevConnFD, "Prev\n", 6);
+            // tcpWrite(server->prevConnFD, "Prev\n");
             n = write(server->nextConnFD, "Next\n", 6);
+            // tcpWrite(server->nextConnFD, "Next\n");
           } else if(strstr(buffer, "show") != NULL) {
             printServerData(server);
           }
@@ -162,7 +166,29 @@ void createServer(Server* server, int _onGoingOperation) {
               serverInRing = 1;
               ongoingOperation = 1;
             } else if(strstr(buffer, "entry ")) {
+              char connectIp[100], connectPort[100];
+              int connectKey;
+              sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &connectKey, connectIp, connectPort); // Get the successor details
+              udp = connectToUdpServer(connectIp, connectPort);
 
+              sprintf(buffer, "EFND %d\n", server->myKey);
+              n=sendto(udp->fd,buffer,strlen(buffer),0, udp->res->ai_addr, udp->res->ai_addrlen);
+              if(n==-1) /*error*/ exit(1);
+
+              n=recvfrom(udp->fd,buffer,128,0, (struct sockaddr*)&(udp->res->ai_addr),&(udp->res->ai_addrlen));
+              if(n==-1) /*error*/ exit(1);
+
+
+              sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
+              printf("Trying to enter\n");
+              server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
+              
+              sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
+              int n = write(server->nextConnFD, buffer, strlen(buffer)); // Give the successor your details
+              if(n == -1)/*error*/exit(1);
+
+              serverInRing = 1;
+              ongoingOperation = 1;
             } else if(strstr(buffer, "exit")) {
 
             }
@@ -446,4 +472,18 @@ void cleanServer(Server * server) {
 
   server->prevConnFD = 0;
   server->nextConnFD = 0;
+}
+
+void tcpWrite(int toWriteFd, char * strToWrite) {
+  int nbytes, nleft, nwritten;
+  nbytes = strlen(strToWrite);
+  nleft = nbytes;
+  while (nleft>0) {
+    nwritten = write(toWriteFd, strToWrite, nleft);
+    if(nwritten <= 0) {
+      printf("\n\n MASSIVE ERROR \n\n");
+    }
+    nleft-=nwritten;
+    strToWrite += nwritten;
+  }
 }
