@@ -32,7 +32,7 @@ int n;
 char buff[100];
 
 struct addrinfo *res;
-UdpData* udp;
+UdpData* udp_main;
 
 
 int main(int argc, char *argv[]) {
@@ -42,57 +42,57 @@ int main(int argc, char *argv[]) {
     strcpy(myServer->myPort, argv[2]);
       
 
-    //while(1) { // The code will run until the "exit" command is summoned
-        // Show the user interface
-        printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n entry i succi succie.IP succi.TCP\n leave\n exit\n");
+    // Show the user interface
+    printf("\n\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n entry i succi succie.IP succi.TCP\n leave\n exit\n");
+    
+    strcpy(buff, "\0");
+    fgets(buff, 100 , stdin);
+    const char delim[2] = " ";
+    if(strcmp(strtok(strdup(buff), delim), "new") == 0) { // If its the "new" command then create a ring with that server
+        sscanf(buff, "%s %d", aux, &(myServer->myKey)); // Get the server key
+        createServer(myServer, 0);
+    } else  if(strcmp(strtok(strdup(buff), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
+        sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
+        printf("Trying to enter\n");
+        myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
         
-        strcpy(buff, "\0");
-        fgets(buff, 100 , stdin);
-        const char delim[2] = " ";
-        if(strcmp(strtok(strdup(buff), delim), "new") == 0) { // If its the "new" command then create a ring with that server
-            sscanf(buff, "%s %d", aux, &(myServer->myKey)); // Get the server key
-            createServer(myServer, 0);
-        } else  if(strcmp(strtok(strdup(buff), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
-            sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
-            printf("Trying to enter\n");
-            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
-            
-            sprintf(buff, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
-            int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
-            if(n == -1)/*error*/exit(1);
-                           
-            createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
-        } else if(strcmp(strtok(strdup(buff), delim), "entry") == 0) {
-            char connectIp[100], connectPort[100];
-            int connectKey;
-            sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &connectKey, connectIp, connectPort); // Get the successor details
-            udp = connectToUdpServer(connectIp, connectPort);
+        sprintf(buff, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
+        int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
+        if(n == -1)/*error*/exit(1);
+                        
+        createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
+    } else if(strcmp(strtok(strdup(buff), delim), "entry") == 0) {
+        char connectIp[100], connectPort[100];
+        int connectKey;
+        sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &connectKey, connectIp, connectPort); // Get the successor details
+        udp_main = connectToUdpServer(connectIp, connectPort);
 
-            sprintf(buff, "EFND %d\n", myServer->myKey);
-            n=sendto(udp->fd,buff,strlen(buff),0, udp->res->ai_addr, udp->res->ai_addrlen);
-            if(n==-1) /*error*/ exit(1);
+        sprintf(buff, "EFND %d\n", myServer->myKey);
+        n=sendto(udp_main->fd,buff,strlen(buff),0, udp_main->res->ai_addr, udp_main->res->ai_addrlen);
+        if(n==-1) /*error*/ exit(1);
 
-            n=recvfrom(udp->fd,buff,128,0, (struct sockaddr*)&(udp->res->ai_addr),&(udp->res->ai_addrlen));
-            if(n==-1) /*error*/ exit(1);
+        n=recvfrom(udp_main->fd,buff,128,0, (struct sockaddr*)&(udp_main->res->ai_addr),&(udp_main->res->ai_addrlen));
+        if(n==-1) /*error*/ exit(1);
 
 
-            sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
-            printf("Trying to enter\n");
-            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
-            
-            sprintf(buff, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
-            int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
-            if(n == -1)/*error*/exit(1);
-                           
-            createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
+        sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
+        printf("Trying to enter\n");
+        myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
+        
+        sprintf(buff, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
+        int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
+        if(n == -1)/*error*/exit(1);
+                        
+        createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
 
-            freeaddrinfo(udp->res);
-            close(udp->fd);
-        } else if(strstr(buff, "exit") != NULL) {
-            exit(0);
-        }
-    //}
-
+        freeaddrinfo(udp_main->res);
+        free(udp_main);
+        close(udp_main->fd);
+    } else if(strstr(buff, "exit") != NULL) {
+        free(myServer);
+        exit(0);
+    }
+    free(myServer);
     return 0;
 }
 
@@ -123,10 +123,6 @@ int checkIp(char * ip) {
     char* ptr;
     int i, num, dots = 0;
 
-    if(strlen(ip) != 15) {
-        printf("Ip Size must be 15 chars\n");
-        return 0;
-    }
 
     ptr = strtok(ip, ".");
 
@@ -159,8 +155,3 @@ int checkIp(char * ip) {
     return 1; 
 }
 
-void flush_stdin() {
-    char c;
-    ungetc('\n', stdin); // ensure that stdin is always dirty
-    while(((c = getchar()) != '\n') && (c != EOF));
-}

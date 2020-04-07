@@ -120,8 +120,6 @@ void createServer(Server* server, int _onGoingOperation) {
         printf("\n show\n find k\n leave\n");
       else
         printf("\nAvailable commands:\n\n new i \n sentry i succi succi.IP succi.TCP\n entry i succi succie.IP succi.TCP\n exit\n");
-    } else {
-      printf("Linha 122\n");
     }
 
     counter = select(maxfd + 1, &rfds, (fd_set*)NULL, (fd_set*)NULL, (struct timeval *)NULL);
@@ -130,13 +128,15 @@ void createServer(Server* server, int _onGoingOperation) {
       fgets(buffer, 100 , stdin);
         if(serverInRing == 1) {
           if(strstr(buffer, "leave") != NULL) {
-            if((server->nextConnFD > 0) && (server->prevConnFD > 0)) { // If there's only one server in the ring
+            if((server->nextConnFD > 0) && (server->prevConnFD > 0)) {
               close(server->prevConnFD);
               close(server->nextConnFD);
             }
             serverInRing = 0;
-            printf("Linha 136\n");
             cleanServer(server);
+            for(int i = 0; i < 3; i++) {
+              client_sockets[i] = 0;
+            }
           } else if(strstr(buffer, "find") != NULL) {
               sscanf(buffer, "%s %d", str, &searchKey);
               ongoingOperation = 1;
@@ -148,13 +148,11 @@ void createServer(Server* server, int _onGoingOperation) {
             printServerData(server);
           }
         } else {
-            printf("Linha 142\n");
             if(strstr(buffer, "new") != NULL) {
               sscanf(buffer, "%s %d", str, &(server->myKey));
               serverInRing = 1;
             } else if(strstr(buffer, "sentry ")) {
               sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
-              printf("Trying to enter\n");
               server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
               
               sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
@@ -177,7 +175,6 @@ void createServer(Server* server, int _onGoingOperation) {
 
 
               sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
-              printf("Trying to enter\n");
               server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
               
               sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
@@ -186,7 +183,7 @@ void createServer(Server* server, int _onGoingOperation) {
               serverInRing = 1;
               ongoingOperation = 1;
             } else if(strstr(buffer, "exit")) {
-
+              break;
             }
         }
       continue;
@@ -223,9 +220,7 @@ void createServer(Server* server, int _onGoingOperation) {
       newfd = client_sockets[i];
       if(FD_ISSET(newfd, &rfds)) {
         if((n = read(newfd, buffer, 128)) == 0) {
-          printf("Connection closed %d\n\n", i);
-          if((server->myKey == server->doubleNextKey) && (newfd == server->nextConnFD)) {
-            //If there are only 2 servers in the ring...
+          if((server->myKey == server->doubleNextKey) && (newfd == server->nextConnFD)) { //If there are only 2 servers in the ring...
             close(server->nextConnFD);
             server->nextConnFD = -1;
             int auxKey = server->myKey;
@@ -239,7 +234,7 @@ void createServer(Server* server, int _onGoingOperation) {
             sprintf(str, "SUCC %d %s %s\n", server->nextKey, server->nextIp, server->nextPort);
             tcpWrite(server->prevConnFD, str);
 
-            tcpWrite(server->prevConnFD, "SUCCCONF\n");
+            tcpWrite(server->nextConnFD, "SUCCCONF\n");
           } else if(newfd == server->prevConnFD) {
             close(server->prevConnFD);
             server->prevConnFD = -1;
@@ -292,10 +287,8 @@ void createServer(Server* server, int _onGoingOperation) {
               server->prevConnFD = newfd;
             }
             ongoingOperation = 0;
-            printf("Linha 266\n");
           } else if(strstr(buffer, "FND ") != NULL) {
               char ip[30], port[10];
-              printf("%s \n", buffer);
               sscanf(buffer, "%s %d %d %s %s", str, &searchKey, &tmp, ip, port);
               if(distance(searchKey, server->nextKey) > distance(searchKey, server->myKey)) {
                 //Send FND for the successor
@@ -323,7 +316,9 @@ void createServer(Server* server, int _onGoingOperation) {
   // Close newfd
   close(client_sockets[0]);
 
+  free(udp);
   freeaddrinfo(res); 
+  close(udpFd);
   close(fd);
 }
 
