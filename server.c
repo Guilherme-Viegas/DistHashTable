@@ -150,9 +150,25 @@ void createServer(Server* server, int _onGoingOperation) {
         } else {
             if(strstr(buffer, "new") != NULL) {
               sscanf(buffer, "%s %d", str, &(server->myKey));
+              if(server->myKey > N) {
+                printf("The key must be smaller than the ring size. Ring size is currently set to 16\n");
+                do {
+                    printf("Please choose another key (must be between 1-16)\n");
+                    printf("New Key: ");
+                    scanf("%d", &(server->myKey));
+                } while(server->myKey > N);
+              } 
               serverInRing = 1;
             } else if(strstr(buffer, "sentry ")) {
               sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
+              if(server->myKey > N) {
+                printf("The key must be smaller than the ring size. Ring size is currently set to 16\n");
+                do {
+                    printf("Please choose another key (must be between 1-16)\n");
+                    printf("New Key: ");
+                    scanf("%d", &(server->myKey));
+                } while(server->myKey > N);
+              } 
               server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
               
               sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
@@ -164,6 +180,14 @@ void createServer(Server* server, int _onGoingOperation) {
               char connectIp[100], connectPort[100];
               int connectKey;
               sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &connectKey, connectIp, connectPort); // Get the successor details
+              if(server->myKey > N) {
+                printf("The key must be smaller than the ring size. Ring size is currently set to 16\n");
+                do {
+                    printf("Please choose another key (must be between 1-16)\n");
+                    printf("New Key: ");
+                    scanf("%d", &(server->myKey));
+                } while(server->myKey > N);
+              }
               udp = connectToUdpServer(connectIp, connectPort);
 
               sprintf(buffer, "EFND %d\n", server->myKey);

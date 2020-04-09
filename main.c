@@ -19,6 +19,8 @@
 #include <sys/select.h>
 #include <errno.h>
 
+#define N 16
+
 
 
 int checkIpPortValid(int, char **);
@@ -50,9 +52,25 @@ int main(int argc, char *argv[]) {
     const char delim[2] = " ";
     if(strcmp(strtok(strdup(buff), delim), "new") == 0) { // If its the "new" command then create a ring with that server
         sscanf(buff, "%s %d", aux, &(myServer->myKey)); // Get the server key
+        if(myServer->myKey > N) {
+            printf("The key must be smaller than the ring size. Ring size is currently set to 16\n");
+            do {
+                printf("Please choose another key (must be between 1-16)\n");
+                printf("New Key: ");
+                scanf("%d", &(myServer->myKey));
+            } while(myServer->myKey > N);
+        }
         createServer(myServer, 0);
     } else  if(strcmp(strtok(strdup(buff), delim), "sentry") == 0) { // If its the sentry command open a connection with nextServer 
         sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
+        if(myServer->myKey > N) {
+            printf("The key must be smaller than the ring size. Ring size is currently set to 16\n");
+            do {
+                printf("Please choose another key (must be between 1-16)\n");
+                printf("New Key: ");
+                scanf("%d", &(myServer->myKey));
+            } while(myServer->myKey > N);
+        } 
         printf("Trying to enter\n");
         myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
         
@@ -65,6 +83,14 @@ int main(int argc, char *argv[]) {
         char connectIp[100], connectPort[100];
         int connectKey;
         sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &connectKey, connectIp, connectPort); // Get the successor details
+        if(myServer->myKey > N) {
+            printf("The key must be smaller than the ring size. Ring size is currently set to 16\n");
+            do {
+                printf("Please choose another key (must be between 1-16)\n");
+                printf("New Key: ");
+                scanf("%d", &(myServer->myKey));
+            } while(myServer->myKey > N);
+        }
         udp_main = connectToUdpServer(connectIp, connectPort);
 
         sprintf(buff, "EFND %d\n", myServer->myKey);
