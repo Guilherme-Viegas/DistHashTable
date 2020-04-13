@@ -199,13 +199,17 @@ void createServer(Server* server, int _onGoingOperation) {
 
 
               sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
-              server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
+              if(server->myKey == server->nextKey) {
+                printf("Duplicate keys are not allowed, please try to enter with another key!\n");
+              } else {
+                server->nextConnFD = connectToNextServer(server); // Set the next server as the given server and establish a connection
               
-              sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
-              tcpWrite(server->nextConnFD, buffer);  // Give the successor your details
+                sprintf(buffer, "NEW %d %s %s\n", server->myKey, server->myIp, server->myPort);
+                tcpWrite(server->nextConnFD, buffer);  // Give the successor your details
 
-              serverInRing = 1;
-              ongoingOperation = 1;
+                serverInRing = 1;
+                ongoingOperation = 1;
+              }
             } else if(strstr(buffer, "exit")) {
               break;
             }
@@ -243,7 +247,8 @@ void createServer(Server* server, int _onGoingOperation) {
     for(int i = 0; i < 3; i++) {
       newfd = client_sockets[i];
       if(FD_ISSET(newfd, &rfds)) {
-        if((n = read(newfd, buffer, 128)) == 0) {
+        strcpy(buffer, "");
+        if((n = tpcRead(newfd, buffer)) == 0) {
           if((server->myKey == server->doubleNextKey) && (newfd == server->nextConnFD)) { //If there are only 2 servers in the ring...
             close(server->nextConnFD);
             server->nextConnFD = -1;
@@ -265,7 +270,7 @@ void createServer(Server* server, int _onGoingOperation) {
           }
           client_sockets[i] = 0;
         } else { 
-          buffer[n] = '\0';
+          buffer[strlen(buffer)] = '\0';
           write(1, "Received: ", 11); write(1, buffer, sizeof(buffer));
           //Now check what the incoming message is asking for
           if(strstr(buffer, "NEW") != NULL) {
@@ -326,7 +331,8 @@ void createServer(Server* server, int _onGoingOperation) {
             int connectKey;
             char connectIp[30], connectPort[10];
             sscanf(buffer, "%s %d %d %s %s", str, &searchKey, &connectKey, connectIp, connectPort);
-
+            
+            printf("Linha 330 recebido: %s\n", buffer);
             sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, connectKey, connectIp, connectPort);
             n = sendto(udpFd,buffer,strlen(buffer),0, (struct sockaddr*)&udpAddr, udpAddrlen);
             ongoingOperation = 0;
@@ -448,6 +454,7 @@ void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* 
   if((server->nextConnFD <= 0) && (server->prevConnFD <= 0)) { //If only 1 server in the ring
     printf("I'm the nearest server (my key: %d) to %d key\n", server->myKey, searchKey);
     if(entry == 1) {
+      printf("Linha 456: %s\n", buffer);
       sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, server->myKey, server->myIp, server->myPort);
       n = sendto(fd,buffer,strlen(buffer),0, udpAddr, udpAddrlen);
     }
@@ -460,6 +467,7 @@ void startKeySearch(Server * server, int searchKey, int entry, struct sockaddr* 
   } else { //I am the nearest server
     printf("Server %d is the nearest server of %d\n", server->nextKey, searchKey);
     if(entry == 1) {
+      printf("Linha 469: %s\n", buffer);
       sprintf(buffer, "EKEY %d %d %s %s\n", searchKey, server->nextKey, server->nextIp, server->nextPort);
       n = sendto(fd,buffer,strlen(buffer),0, udpAddr, udpAddrlen);
     }
@@ -496,13 +504,19 @@ void tcpWrite(int toWriteFd, char * strToWrite) {
 }
 
 int tpcRead(int toReadFd, char * bufferToRead) {
-  int nread, nleft;
-  nleft = strlen(bufferToRead);
+  int nread = 0, nleft;
+  nleft = 128;
   while(nleft > 0) {
-    nread = read(toReadFd, bufferToRead, strlen(bufferToRead));
+    if(strstr(bufferToRead - nread, "\n") != NULL) {
+      break;
+    }
+    nread = read(toReadFd, bufferToRead, nleft);
     if (nread == -1) return -1;
     if(nread == 0) return 0;
     nleft -= nread;
     bufferToRead += nread;
   }
+  nread=128-nleft;
+  bufferToRead -= nread;
+  return 1;
 }

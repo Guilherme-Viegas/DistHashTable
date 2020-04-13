@@ -102,15 +102,19 @@ int main(int argc, char *argv[]) {
 
 
         sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
-        printf("Trying to enter\n");
-        myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
-        
-        sprintf(buff, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
-        int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
-        if(n == -1)/*error*/exit(1);
-                        
-        createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
 
+        if(myServer->myKey == myServer->nextKey) {
+            printf("Duplicate keys are not allowed, please try to enter with another key!\n");
+        } else {
+            myServer->nextConnFD = connectToNextServer(myServer); // Set the next server as the given server and establish a connection
+        
+            sprintf(buff, "NEW %d %s %s\n", myServer->myKey, myServer->myIp, myServer->myPort);
+            int n = write(myServer->nextConnFD, buff, strlen(buff)); // Give the successor your details
+            if(n == -1)/*error*/exit(1);
+                            
+            createServer(myServer, 1); //Now that the entry connections are established and stable it's time enter in listening mode
+
+        }
         freeaddrinfo(udp_main->res);
         free(udp_main);
         close(udp_main->fd);
@@ -147,7 +151,7 @@ int valid_digit(char *ip_str) {
 /*Check the Ip Address format*/
 int checkIp(char * ip) {
     char* ptr;
-    int i, num, dots = 0;
+    int num, dots = 0;
 
 
     ptr = strtok(ip, ".");
