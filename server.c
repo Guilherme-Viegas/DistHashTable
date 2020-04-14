@@ -11,6 +11,7 @@
 #include <math.h>
 #include <sys/select.h>
 #include <errno.h>
+#include <signal.h>
 #include "server.h"
 
 #define N 16
@@ -71,6 +72,12 @@ void createServer(Server* server, int _onGoingOperation) {
 
   int ongoingOperation = _onGoingOperation;
   int serverInRing = 1;
+
+  struct sigaction act;
+
+  memset(&act,0,sizeof act);
+  act.sa_handler=SIG_IGN;
+  if(sigaction(SIGPIPE,&act,NULL)==-1)/*error*/exit(1);
 
   while(1) {
     // Set all sockets to 0
@@ -191,11 +198,18 @@ void createServer(Server* server, int _onGoingOperation) {
               udp = connectToUdpServer(connectIp, connectPort);
 
               sprintf(buffer, "EFND %d\n", server->myKey);
-              n=sendto(udp->fd,buffer,strlen(buffer),0, udp->res->ai_addr, udp->res->ai_addrlen);
-              if(n==-1) /*error*/ exit(1);
 
-              n=recvfrom(udp->fd,buffer,128,0, (struct sockaddr*)&(udp->res->ai_addr),&(udp->res->ai_addrlen));
-              if(n==-1) /*error*/ exit(1);
+              struct timeval tv;
+              tv.tv_sec = 0;
+              tv.tv_usec = 100000; // 100 ms timeout
+              setsockopt(udp->fd, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv));
+
+
+              sprintf(buffer, "EFND %d\n", server->myKey);
+              do { // If the answer from the server isn't received, send the request again
+                  n=sendto(udp->fd,buffer,strlen(buffer),0, udp->res->ai_addr, udp->res->ai_addrlen);
+                  if(n==-1) /*error*/ exit(1); 
+              } while ((n = recvfrom(udp->fd,buffer,128,0, (struct sockaddr*)&(udp->res->ai_addr),&(udp->res->ai_addrlen))) < 0);
 
 
               sscanf(buffer, "%s %d %d %s %s", str, &(server->myKey), &(server->nextKey), server->nextIp, server->nextPort); // Get the successor details
@@ -497,6 +511,7 @@ void tcpWrite(int toWriteFd, char * strToWrite) {
     nwritten = write(toWriteFd, strToWrite, nleft);
     if(nwritten <= 0) {
       printf("\n\n MASSIVE ERROR \n\n");
+      break;
     }
     nleft-=nwritten;
     strToWrite += nwritten;

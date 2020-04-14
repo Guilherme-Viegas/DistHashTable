@@ -93,12 +93,17 @@ int main(int argc, char *argv[]) {
         }
         udp_main = connectToUdpServer(connectIp, connectPort);
 
-        sprintf(buff, "EFND %d\n", myServer->myKey);
-        n=sendto(udp_main->fd,buff,strlen(buff),0, udp_main->res->ai_addr, udp_main->res->ai_addrlen);
-        if(n==-1) /*error*/ exit(1);
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 100000; // 100 ms timeout
+        setsockopt(udp_main->fd, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv));
 
-        n=recvfrom(udp_main->fd,buff,128,0, (struct sockaddr*)&(udp_main->res->ai_addr),&(udp_main->res->ai_addrlen));
-        if(n==-1) /*error*/ exit(1);
+
+        sprintf(buff, "EFND %d\n", myServer->myKey);
+        do { // If the answer from the server isn't received, send the request again
+            n=sendto(udp_main->fd,buff,strlen(buff),0, udp_main->res->ai_addr, udp_main->res->ai_addrlen);
+            if(n==-1) /*error*/ exit(1); 
+        } while ((n=recvfrom(udp_main->fd,buff,128,0, (struct sockaddr*)&(udp_main->res->ai_addr),&(udp_main->res->ai_addrlen))) < 0);
 
 
         sscanf(buff, "%s %d %d %s %s", aux, &(myServer->myKey), &(myServer->nextKey), myServer->nextIp, myServer->nextPort); // Get the successor details
