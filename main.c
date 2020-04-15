@@ -32,15 +32,17 @@ char aux[100];
 char c;
 int n;
 char buff[100];
+char ip[100];
 
 struct addrinfo *res;
 UdpData* udp_main;
 
 
 int main(int argc, char *argv[]) {
+    strcpy(ip, argv[1]);
     if(!checkIpPortValid(argc, argv)) exit(0); // Check if the dkt program was summoned with 3 arguments
     Server * myServer = (Server*)malloc(sizeof(Server));
-    strcpy(myServer->myIp, "127.0.0.1");
+    strcpy(myServer->myIp, ip);
     strcpy(myServer->myPort, argv[2]);
       
 
@@ -177,7 +179,7 @@ int checkIp(char * ip) {
             if (ptr != NULL) 
                 ++dots; 
         } else {
-            printf("Strange Format my boy");
+            printf("Did you enter a number in the ip?\n");
             return 0; 
         }
     } 
